@@ -13,7 +13,8 @@ const API = {
   differentials: (params) => fetchJSON("/api/differentials?" + new URLSearchParams(params)),
   fixtureTicker: () => fetchJSON("/api/fixture-ticker"),
   teams: () => fetchJSON("/api/teams"),
-  teamAnalysis: () => fetchJSON("/api/team-analysis"),
+  // Accept optional teamId (club id) to analyse a club, or no arg to analyse the user's saved squad
+  teamAnalysis: (teamId) => fetchJSON("/api/team-analysis" + (teamId ? ("?team_id=" + encodeURIComponent(teamId)) : "")),
 };
 
 let sessionExpiredHandled = false;
@@ -556,13 +557,51 @@ function renderBrowseTable(players) {
 
 // ------------------------------------------------------ team analyser ----
 async function loadAnalyserTab() {
+  // Populate analyser team picker with clubs from API and default option
+  const select = document.getElementById("analyser-team-select");
+  if (select) {
+    select.innerHTML = `<option value="">My saved squad</option>`;
+    try {
+      const { teams } = await API.teams();
+      teams.forEach((t) => {
+        const opt = document.createElement("option");
+        opt.value = t.id !== undefined && t.id !== null ? t.id : t.short_name;
+        opt.textContent = t.name || t.short_name;
+        select.appendChild(opt);
+      });
+    } catch (err) {
+      console.error("Failed to load teams for analyser:", err);
+    }
+  }
+
+  // Load analysis for the currently selected option (defaults to user's saved squad)
+  await loadAnalyserForSelected();
+}
+
+async function loadAnalyserForSelected() {
+  const select = document.getElementById("analyser-team-select");
+  const teamId = select && select.value ? select.value : null;
+  const loadBtn = document.getElementById("analyser-load-btn");
+  if (loadBtn) loadBtn.disabled = true;
   try {
-    const data = await API.teamAnalysis();
+    const data = teamId ? await API.teamAnalysis(teamId) : await API.teamAnalysis();
     renderAnalyser(data);
   } catch (err) {
+    console.error("Failed to load analysis:", err);
     document.getElementById("analyser-empty").classList.remove("hidden");
     document.getElementById("analyser-content").classList.add("hidden");
+  } finally {
+    if (loadBtn) loadBtn.disabled = false;
   }
+}
+
+// Wire the Analyse button
+const analyserLoadBtn = document.getElementById("analyser-load-btn");
+if (analyserLoadBtn) {
+  analyserLoadBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    loadAnalyserForSelected();
+  });
 }
 
 function renderAnalyser(data) {
