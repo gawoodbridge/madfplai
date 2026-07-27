@@ -55,6 +55,75 @@ document.getElementById("tabs").addEventListener("click", (e) => {
   if (target === "browse") loadBrowseTab();
 });
 
+let browseTeamsLoaded = false;
+
+async function loadBrowseTab() {
+  if (browseTeamsLoaded) return;
+  browseTeamsLoaded = true;
+
+  try {
+    const { teams } = await API.teams();
+    const select = document.getElementById("browse-team");
+    teams.forEach((t) => {
+      const opt = document.createElement("option");
+      opt.value = t.short_name;
+      opt.textContent = t.name;
+      select.appendChild(opt);
+    });
+  } catch (err) { console.error(err); }
+
+  wireBrowseFilters();
+  await runBrowseSearch();
+}
+
+function wireBrowseFilters() {
+  const debouncedSearch = debounce(runBrowseSearch, 300);
+  document.getElementById("browse-search").addEventListener("input", debouncedSearch);
+  document.getElementById("browse-position").addEventListener("change", runBrowseSearch);
+  document.getElementById("browse-team").addEventListener("change", runBrowseSearch);
+  document.getElementById("browse-min-price").addEventListener("input", debouncedSearch);
+  document.getElementById("browse-max-price").addEventListener("input", debouncedSearch);
+}
+
+async function runBrowseSearch() {
+  const params = {};
+  const search = document.getElementById("browse-search").value.trim();
+  const position = document.getElementById("browse-position").value;
+  const team = document.getElementById("browse-team").value;
+  const minPrice = document.getElementById("browse-min-price").value;
+  const maxPrice = document.getElementById("browse-max-price").value;
+  if (search) params.search = search;
+  if (position) params.position = position;
+  if (team) params.team = team;
+  if (minPrice) params.min_price = minPrice;
+  if (maxPrice) params.max_price = maxPrice;
+
+  try {
+    const { players } = await API.players(params);
+    renderBrowseTable(players);
+  } catch (err) { console.error(err); }
+}
+
+function renderBrowseTable(players) {
+  const body = document.getElementById("browse-body");
+  body.innerHTML = "";
+  players.slice(0, 100).forEach((p) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${p.web_name}</td>
+      <td>${p.team_short}</td>
+      <td>${p.position}</td>
+      <td>£${p.price}m</td>
+      <td>${p.form}</td>
+      <td>${p.total_points}</td>
+      <td>${p.score}</td>
+    `;
+    body.appendChild(row);
+  });
+}
+
+
+
 // ------------------------------------------------------------- init ----
 init();
 
