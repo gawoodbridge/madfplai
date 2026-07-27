@@ -127,7 +127,7 @@ h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
 }
 .field-row label .hint { font-size: 12px; font-weight: 400; color: var(--muted); }
 
-input[type="number"], input[type="text"], input[type="password"], select {
+input[type="number"], input[type="text"], select {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--line);
@@ -452,6 +452,12 @@ input:focus, select:focus, button:focus-visible {
 .fd-5 { background: #FBE7E5; color: var(--red); }
 
 /* ---------------------------------------------------------------------
+   All players filter row
+--------------------------------------------------------------------- */
+.filter-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.filter-row input, .filter-row select { width: auto; flex: 1 1 160px; }
+
+/* ---------------------------------------------------------------------
    Footer
 --------------------------------------------------------------------- */
 .footer {
@@ -473,7 +479,3 @@ input:focus, select:focus, button:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
-
-
-.filter-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
-.filter-row input, .filter-row select { width: auto; flex: 1 1 160px; }
