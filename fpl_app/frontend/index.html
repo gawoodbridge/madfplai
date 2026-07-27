@@ -232,6 +232,20 @@
       <p class="muted">A deeper look at your saved squad — balance, value and risk.</p>
     </div>
 
+    <!-- New: team picker for analyser -->
+    <div class="field-row analyser-picker">
+      <label for="analyser-team-select">
+        <span>Analyse team</span>
+        <span class="hint">Choose a saved team from the database (or use your own saved squad)</span>
+      </label>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+        <select id="analyser-team-select">
+          <option value="">My saved squad</option>
+        </select>
+        <button class="btn-primary" id="analyser-load-btn">Analyze</button>
+      </div>
+    </div>
+
     <div id="analyser-empty" class="empty-state hidden">
       <p>Build a squad first to see your analysis.</p>
     </div>
