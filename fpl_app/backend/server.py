@@ -164,6 +164,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._handle_differentials(query)
                 if path == "/api/fixture-ticker":
                     return self._handle_fixture_ticker()
+                if path == "/api/team-analysis":
+                    return self._handle_team_analysis(query, username)
                 return self._send_error_json("Unknown endpoint", 404)
 
             return self._serve_static(path)
@@ -449,6 +451,111 @@ class Handler(BaseHTTPRequestHandler):
     def _handle_reset(self, username):
         data_store.reset_user_data(username)
         self._send_json({"message": "Squad and gameweek history cleared."})
+
+    def _handle_team_analysis(self, query, username):
+        """
+        Analyse either:
+          - a saved user squad (no team_id param) OR
+          - an FPL club (team_id param -> top XI + bench from rated players)
+        Returns JSON shaped for the frontend analyser.
+        """
+        rated_players, bootstrap = get_rated_players()
+        team_id_param = (query.get("team_id") or [None])[0]
+
+        def compute_analysis(starting, bench):
+            combined = list(starting) + list(bench)
+            # total score over starting XI
+            total_score = round(sum(float(p.get("score", 0.0)) for p in starting), 3)
+            # total value across all 15 (starting + bench)
+            total_value = round(sum(float(p.get("price", 0.0)) for p in combined), 1) if combined else 0.0
+            spend_efficiency = round(total_score / total_value, 3) if total_value else None
+            starting_fixture_difficulty = None
+            if starting:
+                starting_fixture_difficulty = round(sum(float(p.get("fixture_difficulty", 0.0)) for p in starting) / len(starting), 2)
+
+            # position breakdown from starting XI
+            position_breakdown = {}
+            for p in starting:
+                pos = p.get("position", "UNK")
+                stats = position_breakdown.setdefault(pos, {"count": 0, "avg_score": 0.0, "total_price": 0.0})
+                stats["count"] += 1
+                stats["avg_score"] += float(p.get("score", 0.0))
+                stats["total_price"] += float(p.get("price", 0.0))
+            for pos, s in position_breakdown.items():
+                s["avg_score"] = round(s["avg_score"] / s["count"], 3) if s["count"] else 0.0
+                s["total_price"] = round(s["total_price"], 1)
+
+            # club breakdown over all combined picks (usually 15)
+            club_counts = {}
+            for p in combined:
+                key = p.get("team_short") or p.get("team_name") or "?"
+                club_counts[key] = club_counts.get(key, 0) + 1
+            club_breakdown = [{"team": k, "count": v} for k, v in sorted(club_counts.items(), key=lambda x: (-x[1], x[0]))]
+
+            # simple risk flags (status not 'a' or presence of news)
+            risk_flags = []
+            for p in combined:
+                if p.get("news") or (p.get("status") and p.get("status") != "a"):
+                    risk_flags.append({
+                        "web_name": p.get("web_name"),
+                        "status": p.get("status"),
+                        "news": p.get("news", "")
+                    })
+
+            return {
+                "total_score": total_score,
+                "total_value": total_value,
+                "spend_efficiency": spend_efficiency,
+                "starting_fixture_difficulty": starting_fixture_difficulty,
+                "position_breakdown": position_breakdown,
+                "club_breakdown": club_breakdown,
+                "risk_flags": risk_flags,
+            }
+
+        # If team_id provided -> analyse that club's best XI + bench
+        if team_id_param:
+            try:
+                team_id = int(team_id_param)
+            except (ValueError, TypeError):
+                return self._send_error_json("Invalid team_id", 400)
+            team_players = [p for p in rated_players if p.get("team_id") == team_id]
+            if not team_players:
+                return self._send_error_json("No players found for that team", 404)
+            # pick best XI by score; bench next up to 4
+            team_players.sort(key=lambda p: float(p.get("score", 0.0)), reverse=True)
+            starting = team_players[:11]
+            bench = team_players[11:15]
+            analysis = compute_analysis(starting, bench)
+            self._send_json(analysis)
+            return
+
+        # No team_id -> analyse the current user's saved squad
+        squad = data_store.load_squad(username)
+        if squad is None:
+            # Return empty-ish analysis so frontend can show the empty state
+            self._send_json({
+                "total_score": 0,
+                "total_value": 0,
+                "spend_efficiency": None,
+                "starting_fixture_difficulty": None,
+                "position_breakdown": {},
+                "club_breakdown": [],
+                "risk_flags": [],
+            })
+            return
+
+        rated_players_latest, _ = get_rated_players()
+        fresh_squad = refresh_squad_scores(squad["picks"], rated_players_latest)
+        if len(fresh_squad) != len(squad["picks"]):
+            return self._send_json({
+                "error": "Some previously saved players are no longer in the FPL dataset. Please rebuild your squad."
+            }, status=422)
+
+        lineup_result = lineup.pick_starting_xi(fresh_squad, squad.get("formation"))
+        starting = lineup_result.get("starting", [])
+        bench = lineup_result.get("bench", [])
+        analysis = compute_analysis(starting, bench)
+        self._send_json(analysis)
 
 
 def main():
