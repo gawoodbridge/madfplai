@@ -247,7 +247,7 @@ class Handler(BaseHTTPRequestHandler):
         })
 
     def _handle_players(self, query):
-    rated_players, _ = get_rated_players()
+        rated_players, _ = get_rated_players()
     position = (query.get("position") or [None])[0]
     search = (query.get("search") or [None])[0]
     team = (query.get("team") or [None])[0]
