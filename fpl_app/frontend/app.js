@@ -13,6 +13,7 @@ const API = {
   reset: () => fetchJSON("/api/reset", { method: "POST" }),
   differentials: (params) => fetchJSON("/api/differentials?" + new URLSearchParams(params)),
   fixtureTicker: () => fetchJSON("/api/fixture-ticker"),
+  teamAnalysis: () => fetchJSON("/api/team-analysis"),
 };
 
 let sessionExpiredHandled = false;
@@ -53,6 +54,8 @@ document.getElementById("tabs").addEventListener("click", (e) => {
   if (target === "help") loadHelpTab();
   document.getElementById("browse-tab").classList.toggle("hidden", target !== "browse");
   if (target === "browse") loadBrowseTab();
+  document.getElementById("analyser-tab").classList.toggle("hidden", target !== "analyser");
+  if (target === "analyser") loadAnalyserTab(); 
 });
 
 let browseTeamsLoaded = false;
@@ -83,6 +86,8 @@ function wireBrowseFilters() {
   document.getElementById("browse-team").addEventListener("change", runBrowseSearch);
   document.getElementById("browse-min-price").addEventListener("input", debouncedSearch);
   document.getElementById("browse-max-price").addEventListener("input", debouncedSearch);
+  document.getElementById("browse-sort").addEventListener("change", runBrowseSearch);
+  document.getElementById("browse-order").addEventListener("change", runBrowseSearch);
 }
 
 async function runBrowseSearch() {
@@ -96,7 +101,22 @@ async function runBrowseSearch() {
   if (position) params.position = position;
   if (team) params.team = team;
   if (minPrice) params.min_price = minPrice;
+  if (maxPrice) params.max_price = maxPrice;async function runBrowseSearch() {
+  const params = {};
+  const search = document.getElementById("browse-search").value.trim();
+  const position = document.getElementById("browse-position").value;
+  const team = document.getElementById("browse-team").value;
+  const minPrice = document.getElementById("browse-min-price").value;
+  const maxPrice = document.getElementById("browse-max-price").value;
+  const sort = document.getElementById("browse-sort").value;
+  const order = document.getElementById("browse-order").value;
+  if (search) params.search = search;
+  if (position) params.position = position;
+  if (team) params.team = team;
+  if (minPrice) params.min_price = minPrice;
   if (maxPrice) params.max_price = maxPrice;
+  params.sort = sort;
+  params.order = order;
 
   try {
     const { players } = await API.players(params);
@@ -563,4 +583,60 @@ function debounce(fn, ms) {
     clearTimeout(t);
     t = setTimeout(() => fn(...args), ms);
   };
+}
+
+
+let analyserLoaded = false;
+
+async function loadAnalyserTab() {
+  analyserLoaded = false; // always refresh — squad can change between visits
+  try {
+    const data = await API.teamAnalysis();
+    renderAnalyser(data);
+  } catch (err) {
+    document.getElementById("analyser-empty").classList.remove("hidden");
+    document.getElementById("analyser-content").classList.add("hidden");
+  }
+}
+
+function renderAnalyser(data) {
+  document.getElementById("analyser-empty").classList.add("hidden");
+  document.getElementById("analyser-content").classList.remove("hidden");
+
+  document.getElementById("analyser-summary-chips").innerHTML = `
+    <div class="meta-chip"><span class="meta-label">Total rating</span><span class="meta-value">${data.total_score}</span></div>
+    <div class="meta-chip"><span class="meta-label">Squad value</span><span class="meta-value">£${data.total_value}m</span></div>
+    <div class="meta-chip"><span class="meta-label">Rating per £m</span><span class="meta-value">${data.spend_efficiency}</span></div>
+    <div class="meta-chip"><span class="meta-label">XI fixture difficulty</span><span class="meta-value">${data.starting_fixture_difficulty ?? "—"}</span></div>
+  `;
+
+  const posBody = document.getElementById("analyser-position-body");
+  posBody.innerHTML = "";
+  Object.entries(data.position_breakdown).forEach(([pos, stats]) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td>${pos}</td><td>${stats.count}</td><td>${stats.avg_score}</td><td>£${stats.total_price}m</td>`;
+    posBody.appendChild(row);
+  });
+
+  const clubBox = document.getElementById("analyser-clubs");
+  clubBox.innerHTML = "";
+  data.club_breakdown.forEach((c) => {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = `${c.team}: ${c.count}`;
+    clubBox.appendChild(chip);
+  });
+
+  const riskBox = document.getElementById("analyser-risks");
+  if (!data.risk_flags.length) {
+    riskBox.innerHTML = `<p class="muted">No injury/availability concerns in your squad right now.</p>`;
+  } else {
+    riskBox.innerHTML = "";
+    data.risk_flags.forEach((r) => {
+      const box = document.createElement("div");
+      box.className = "callout";
+      box.innerHTML = `<strong>${r.web_name}</strong> — ${r.news || "Flagged as " + r.status}`;
+      riskBox.appendChild(box);
+    });
+  }
 }
