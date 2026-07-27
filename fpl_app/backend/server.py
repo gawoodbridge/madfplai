@@ -148,6 +148,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/session":
                 return self._handle_session()
 
+            if path == "/api/teams":
+                return self._handle_teams()
+
             if path.startswith("/api/"):
                 username = self._current_username()
                 if username is None:
