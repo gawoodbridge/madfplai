@@ -2,7 +2,6 @@
 
 const API = {
   session: () => fetchJSON("/api/session"),
-  teams: () => fetchJSON("/api/teams"),
   login: (body) => fetchJSON("/api/login", { method: "POST", body: JSON.stringify(body) }),
   logout: () => fetchJSON("/api/logout", { method: "POST" }),
   status: () => fetchJSON("/api/status"),
@@ -13,6 +12,7 @@ const API = {
   reset: () => fetchJSON("/api/reset", { method: "POST" }),
   differentials: (params) => fetchJSON("/api/differentials?" + new URLSearchParams(params)),
   fixtureTicker: () => fetchJSON("/api/fixture-ticker"),
+  teams: () => fetchJSON("/api/teams"),
   teamAnalysis: () => fetchJSON("/api/team-analysis"),
 };
 
@@ -50,99 +50,13 @@ document.getElementById("tabs").addEventListener("click", (e) => {
   const target = btn.dataset.tab;
   document.getElementById("squad-tab").classList.toggle("hidden", target !== "squad");
   document.getElementById("compare-tab").classList.toggle("hidden", target !== "compare");
+  document.getElementById("browse-tab").classList.toggle("hidden", target !== "browse");
+  document.getElementById("analyser-tab").classList.toggle("hidden", target !== "analyser");
   document.getElementById("help-tab").classList.toggle("hidden", target !== "help");
   if (target === "help") loadHelpTab();
-  document.getElementById("browse-tab").classList.toggle("hidden", target !== "browse");
   if (target === "browse") loadBrowseTab();
-  document.getElementById("analyser-tab").classList.toggle("hidden", target !== "analyser");
-  if (target === "analyser") loadAnalyserTab(); 
+  if (target === "analyser") loadAnalyserTab();
 });
-
-let browseTeamsLoaded = false;
-
-async function loadBrowseTab() {
-  if (browseTeamsLoaded) return;
-  browseTeamsLoaded = true;
-
-  try {
-    const { teams } = await API.teams();
-    const select = document.getElementById("browse-team");
-    teams.forEach((t) => {
-      const opt = document.createElement("option");
-      opt.value = t.short_name;
-      opt.textContent = t.name;
-      select.appendChild(opt);
-    });
-  } catch (err) { console.error(err); }
-
-  wireBrowseFilters();
-  await runBrowseSearch();
-}
-
-function wireBrowseFilters() {
-  const debouncedSearch = debounce(runBrowseSearch, 300);
-  document.getElementById("browse-search").addEventListener("input", debouncedSearch);
-  document.getElementById("browse-position").addEventListener("change", runBrowseSearch);
-  document.getElementById("browse-team").addEventListener("change", runBrowseSearch);
-  document.getElementById("browse-min-price").addEventListener("input", debouncedSearch);
-  document.getElementById("browse-max-price").addEventListener("input", debouncedSearch);
-  document.getElementById("browse-sort").addEventListener("change", runBrowseSearch);
-  document.getElementById("browse-order").addEventListener("change", runBrowseSearch);
-}
-
-async function runBrowseSearch() {
-  const params = {};
-  const search = document.getElementById("browse-search").value.trim();
-  const position = document.getElementById("browse-position").value;
-  const team = document.getElementById("browse-team").value;
-  const minPrice = document.getElementById("browse-min-price").value;
-  const maxPrice = document.getElementById("browse-max-price").value;
-  if (search) params.search = search;
-  if (position) params.position = position;
-  if (team) params.team = team;
-  if (minPrice) params.min_price = minPrice;
-  if (maxPrice) params.max_price = maxPrice;async function runBrowseSearch() {
-  const params = {};
-  const search = document.getElementById("browse-search").value.trim();
-  const position = document.getElementById("browse-position").value;
-  const team = document.getElementById("browse-team").value;
-  const minPrice = document.getElementById("browse-min-price").value;
-  const maxPrice = document.getElementById("browse-max-price").value;
-  const sort = document.getElementById("browse-sort").value;
-  const order = document.getElementById("browse-order").value;
-  if (search) params.search = search;
-  if (position) params.position = position;
-  if (team) params.team = team;
-  if (minPrice) params.min_price = minPrice;
-  if (maxPrice) params.max_price = maxPrice;
-  params.sort = sort;
-  params.order = order;
-
-  try {
-    const { players } = await API.players(params);
-    renderBrowseTable(players);
-  } catch (err) { console.error(err); }
-}
-
-function renderBrowseTable(players) {
-  const body = document.getElementById("browse-body");
-  body.innerHTML = "";
-  players.slice(0, 100).forEach((p) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${p.web_name}</td>
-      <td>${p.team_short}</td>
-      <td>${p.position}</td>
-      <td>£${p.price}m</td>
-      <td>${p.form}</td>
-      <td>${p.total_points}</td>
-      <td>${p.score}</td>
-    `;
-    body.appendChild(row);
-  });
-}
-
-
 
 // ------------------------------------------------------------- init ----
 init();
@@ -563,33 +477,85 @@ function renderFixtureTicker(teams) {
   });
 }
 
-// ------------------------------------------------------------ shared ----
-function renderSuggestions(box, players, onPick) {
-  if (!players.length) { box.classList.add("hidden"); return; }
-  box.innerHTML = "";
-  players.forEach((p) => {
-    const item = document.createElement("div");
-    item.className = "suggestion-item";
-    item.innerHTML = `<span>${p.web_name} <span class="muted">(${p.team_short}, ${p.position})</span></span><span class="s-price">£${p.price}m</span>`;
-    item.addEventListener("click", () => onPick(p));
-    box.appendChild(item);
+// --------------------------------------------------------- all players ----
+let browseTeamsLoaded = false;
+
+async function loadBrowseTab() {
+  if (!browseTeamsLoaded) {
+    browseTeamsLoaded = true;
+    try {
+      const { teams } = await API.teams();
+      const select = document.getElementById("browse-team");
+      teams.forEach((t) => {
+        const opt = document.createElement("option");
+        opt.value = t.short_name;
+        opt.textContent = t.name;
+        select.appendChild(opt);
+      });
+    } catch (err) {
+      console.error(err);
+    }
+    wireBrowseFilters();
+  }
+  await runBrowseSearch();
+}
+
+function wireBrowseFilters() {
+  const debouncedSearch = debounce(runBrowseSearch, 300);
+  document.getElementById("browse-search").addEventListener("input", debouncedSearch);
+  document.getElementById("browse-position").addEventListener("change", runBrowseSearch);
+  document.getElementById("browse-team").addEventListener("change", runBrowseSearch);
+  document.getElementById("browse-min-price").addEventListener("input", debouncedSearch);
+  document.getElementById("browse-max-price").addEventListener("input", debouncedSearch);
+  document.getElementById("browse-sort").addEventListener("change", runBrowseSearch);
+  document.getElementById("browse-order").addEventListener("change", runBrowseSearch);
+}
+
+async function runBrowseSearch() {
+  const params = {};
+  const search = document.getElementById("browse-search").value.trim();
+  const position = document.getElementById("browse-position").value;
+  const team = document.getElementById("browse-team").value;
+  const minPrice = document.getElementById("browse-min-price").value;
+  const maxPrice = document.getElementById("browse-max-price").value;
+  const sort = document.getElementById("browse-sort").value;
+  const order = document.getElementById("browse-order").value;
+  if (search) params.search = search;
+  if (position) params.position = position;
+  if (team) params.team = team;
+  if (minPrice) params.min_price = minPrice;
+  if (maxPrice) params.max_price = maxPrice;
+  params.sort = sort;
+  params.order = order;
+
+  try {
+    const { players } = await API.players(params);
+    renderBrowseTable(players);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function renderBrowseTable(players) {
+  const body = document.getElementById("browse-body");
+  body.innerHTML = "";
+  players.slice(0, 100).forEach((p) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${p.web_name}</td>
+      <td>${p.team_short}</td>
+      <td>${p.position}</td>
+      <td>£${p.price}m</td>
+      <td>${p.form}</td>
+      <td>${p.total_points}</td>
+      <td>${p.score}</td>
+    `;
+    body.appendChild(row);
   });
-  box.classList.remove("hidden");
 }
 
-function debounce(fn, ms) {
-  let t;
-  return (...args) => {
-    clearTimeout(t);
-    t = setTimeout(() => fn(...args), ms);
-  };
-}
-
-
-let analyserLoaded = false;
-
+// ------------------------------------------------------ team analyser ----
 async function loadAnalyserTab() {
-  analyserLoaded = false; // always refresh — squad can change between visits
   try {
     const data = await API.teamAnalysis();
     renderAnalyser(data);
@@ -639,4 +605,26 @@ function renderAnalyser(data) {
       riskBox.appendChild(box);
     });
   }
+}
+
+// ------------------------------------------------------------ shared ----
+function renderSuggestions(box, players, onPick) {
+  if (!players.length) { box.classList.add("hidden"); return; }
+  box.innerHTML = "";
+  players.forEach((p) => {
+    const item = document.createElement("div");
+    item.className = "suggestion-item";
+    item.innerHTML = `<span>${p.web_name} <span class="muted">(${p.team_short}, ${p.position})</span></span><span class="s-price">£${p.price}m</span>`;
+    item.addEventListener("click", () => onPick(p));
+    box.appendChild(item);
+  });
+  box.classList.remove("hidden");
+}
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
 }
