@@ -473,3 +473,7 @@ input:focus, select:focus, button:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+
+.filter-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.filter-row input, .filter-row select { width: auto; flex: 1 1 160px; }
