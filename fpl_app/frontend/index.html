@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FPL Assistant</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============================== LOGIN SCREEN ============================== -->
+<div id="login-screen" class="login-screen hidden">
+  <form id="login-form" class="login-card">
+    <div class="brand-mark login-mark">XI</div>
+    <h1>FPL Assistant</h1>
+    <p class="muted">Sign in to view your squad.</p>
+
+    <div class="field-row">
+      <label for="login-username"><span>Username</span></label>
+      <input type="text" id="login-username" autocomplete="username" required>
+    </div>
+    <div class="field-row">
+      <label for="login-password"><span>Password</span></label>
+      <input type="password" id="login-password" autocomplete="current-password" required>
+    </div>
+
+    <button type="submit" class="btn-primary full-width" id="login-submit">Sign in</button>
+    <p class="form-error hidden" id="login-error"></p>
+    <p class="login-note muted">Accounts are set up by the admin - there's no self sign-up.</p>
+  </form>
+</div>
+
+<!-- ============================== APP SHELL ============================== -->
+<div id="app-shell" class="hidden">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark">XI</span>
+      <div class="brand-text">
+        <h1>FPL Assistant</h1>
+        <p class="eyebrow" id="gw-label">Loading gameweek&hellip;</p>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab-btn active" data-tab="squad">Squad</button>
+      <button class="tab-btn" data-tab="compare">Compare players</button>
+      <button class="tab-btn" data-tab="help">FPL Help</button>
+    </nav>
+    <button class="btn-ghost small" id="logout-btn" title="Sign out">Sign out</button>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ============================== WEEKLY PROMPT ============================== -->
+  <section id="weekly-panel" class="panel weekly-panel hidden">
+    <div class="panel-head">
+      <h2 id="weekly-title">Set up this gameweek</h2>
+      <p class="muted" id="weekly-sub">Answer once per gameweek — tied to the real FPL deadline.</p>
+    </div>
+
+    <form id="weekly-form">
+      <div class="field-row">
+        <label for="budget-input">
+          <span>Budget</span>
+          <span class="hint">total squad value, in &pound;m</span>
+        </label>
+        <input type="number" id="budget-input" step="0.1" min="60" max="120" value="100.0" required>
+      </div>
+
+      <div class="field-row" id="transfers-row">
+        <label for="transfers-input">
+          <span>Transfers</span>
+          <span class="hint">how many you're willing to make</span>
+        </label>
+        <input type="number" id="transfers-input" step="1" min="0" max="15" value="1" required>
+      </div>
+
+      <div class="field-row" id="formation-row">
+        <label for="formation-input">
+          <span>Formation</span>
+          <span class="hint">optional — leave on auto to maximise score</span>
+        </label>
+        <select id="formation-input">
+          <option value="">Auto (best available)</option>
+          <option value="3-4-3">3-4-3</option>
+          <option value="3-5-2">3-5-2</option>
+          <option value="4-4-2">4-4-2</option>
+          <option value="4-3-3">4-3-3</option>
+          <option value="4-5-1">4-5-1</option>
+          <option value="5-4-1">5-4-1</option>
+          <option value="5-3-2">5-3-2</option>
+        </select>
+      </div>
+
+      <div class="field-row">
+        <label for="required-search">
+          <span>Required players</span>
+          <span class="hint">optional — players you want locked into your squad</span>
+        </label>
+        <div class="required-picker">
+          <input type="text" id="required-search" placeholder="Search a player to lock in&hellip;" autocomplete="off">
+          <div id="required-suggestions" class="suggestions hidden"></div>
+          <div id="required-chips" class="chips"></div>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <label class="toggle">
+          <input type="checkbox" id="full-budget-toggle">
+          <span>Use full budget where possible</span>
+        </label>
+        <label class="toggle" id="full-transfers-toggle-wrap">
+          <input type="checkbox" id="full-transfers-toggle">
+          <span>Use all requested transfers, even with a hit</span>
+        </label>
+      </div>
+
+      <button type="submit" class="btn-primary" id="weekly-submit">Build my team</button>
+      <p class="form-error hidden" id="weekly-error"></p>
+    </form>
+  </section>
+
+  <!-- ============================== SQUAD / PITCH VIEW ============================== -->
+  <section id="squad-tab" class="tab-panel">
+
+    <div id="squad-empty" class="empty-state hidden">
+      <p>No squad yet. Answer this gameweek's setup above to build your team.</p>
+    </div>
+
+    <div id="squad-content" class="hidden">
+      <div class="squad-meta">
+        <div class="meta-chip"><span class="meta-label">Formation</span><span class="meta-value" id="meta-formation">—</span></div>
+        <div class="meta-chip"><span class="meta-label">Bank</span><span class="meta-value" id="meta-bank">—</span></div>
+        <div class="meta-chip"><span class="meta-label">Free transfers</span><span class="meta-value" id="meta-ft">—</span></div>
+        <button class="btn-ghost small" id="change-gameweek-btn">Edit this gameweek</button>
+        <button class="btn-ghost small danger" id="reset-btn">Reset squad</button>
+      </div>
+
+      <div id="transfer-summary" class="callout hidden"></div>
+
+      <div class="pitch-wrap">
+        <div class="pitch" id="pitch">
+          <!-- rows injected by JS -->
+        </div>
+      </div>
+
+      <div class="bench-wrap">
+        <p class="section-label">Bench</p>
+        <div class="bench-row" id="bench-row"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== COMPARER ============================== -->
+  <section id="compare-tab" class="tab-panel hidden">
+    <div class="panel-head">
+      <h2>Compare players</h2>
+      <p class="muted">Search and add two or more players to line their stats up side by side.</p>
+    </div>
+
+    <div class="compare-search">
+      <input type="text" id="compare-search" placeholder="Search a player&hellip;" autocomplete="off">
+      <div id="compare-suggestions" class="suggestions hidden"></div>
+    </div>
+    <div class="chips" id="compare-chips"></div>
+
+    <div id="compare-empty" class="empty-state">
+      <p>Add players above to start comparing.</p>
+    </div>
+
+    <div class="table-scroll">
+      <table id="compare-table" class="compare-table hidden">
+        <thead><tr id="compare-head"></tr></thead>
+        <tbody id="compare-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================== FPL HELP ============================== -->
+  <section id="help-tab" class="tab-panel hidden">
+
+    <div class="panel-head">
+      <h2>Differentials</h2>
+      <p class="muted">Low-ownership players with a strong rating right now — picks that can separate you from your mini-league.</p>
+    </div>
+    <div class="table-scroll">
+      <table class="compare-table">
+        <thead>
+          <tr><th>Player</th><th>Club</th><th>Pos</th><th>Price</th><th>Owned</th><th>Rating</th></tr>
+        </thead>
+        <tbody id="differentials-body"></tbody>
+      </table>
+    </div>
+
+    <div class="panel-head help-section-gap">
+      <h2>Fixture ticker</h2>
+      <p class="muted">Next 5 fixtures per club, easiest (green) to hardest (red) — a quick read for transfer planning.</p>
+    </div>
+    <div class="table-scroll">
+      <table class="compare-table ticker-table">
+        <thead>
+          <tr><th>Club</th><th>GW+1</th><th>GW+2</th><th>GW+3</th><th>GW+4</th><th>GW+5</th></tr>
+        </thead>
+        <tbody id="ticker-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p>Data via the official Fantasy Premier League API. Ratings and squad suggestions are estimates, not guarantees.</p>
+</footer>
+
+</div><!-- /app-shell -->
+
+<script src="app.js"></script>
+</body>
+</html>

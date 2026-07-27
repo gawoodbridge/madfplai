@@ -1,0 +1,475 @@
+/* ---------------------------------------------------------------------
+   Design tokens
+   Palette: chalk background, ink text, pitch green primary accent,
+   a muted violet for secondary emphasis (captaincy, headers), amber
+   reserved for warnings / point hits.
+--------------------------------------------------------------------- */
+:root {
+  --bg: #F7F6F2;
+  --card: #FFFFFF;
+  --ink: #14171A;
+  --muted: #6B6F76;
+  --line: #E3E0D6;
+  --green: #1FAA59;
+  --green-dark: #12703B;
+  --green-pale: #E7F5EC;
+  --violet: #4F3577;
+  --violet-pale: #EFEAF6;
+  --amber: #B36B00;
+  --amber-pale: #FBF0DD;
+  --red: #B3261E;
+
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Roboto Mono", monospace;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+
+/* ---------------------------------------------------------------------
+   Top bar
+--------------------------------------------------------------------- */
+.topbar {
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.topbar-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  letter-spacing: 0.04em;
+}
+.brand-text h1 { font-size: 18px; }
+.eyebrow {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.tabs { display: flex; gap: 4px; background: var(--bg); padding: 4px; border-radius: 999px; }
+.tab-btn {
+  border: none;
+  background: transparent;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tab-btn.active { background: var(--ink); color: var(--bg); }
+
+/* ---------------------------------------------------------------------
+   Layout
+--------------------------------------------------------------------- */
+.wrap { max-width: 960px; margin: 0 auto; padding: 24px 20px 60px; }
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px;
+  margin-bottom: 24px;
+}
+.panel-head { margin-bottom: 18px; }
+.panel-head h2 { font-size: 17px; margin-bottom: 4px; }
+.panel-head p { margin: 0; font-size: 13px; }
+
+/* ---------------------------------------------------------------------
+   Weekly form
+--------------------------------------------------------------------- */
+.field-row { margin-bottom: 16px; }
+.field-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.field-row label .hint { font-size: 12px; font-weight: 400; color: var(--muted); }
+
+input[type="number"], input[type="text"], select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--ink);
+}
+input:focus, select:focus, button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 1px;
+}
+
+.required-picker { position: relative; }
+.suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 0 8px 20px rgba(20, 23, 26, 0.08);
+}
+.suggestion-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+}
+.suggestion-item:last-child { border-bottom: none; }
+.suggestion-item:hover { background: var(--green-pale); }
+.suggestion-item .s-price { font-family: var(--font-mono); color: var(--muted); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--violet-pale);
+  color: var(--violet);
+  border-radius: 999px;
+  padding: 6px 8px 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.chip button {
+  border: none;
+  background: none;
+  color: var(--violet);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px;
+}
+
+.toggle-row { display: flex; flex-direction: column; gap: 10px; margin: 18px 0; }
+.toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.toggle input { width: 16px; height: 16px; }
+
+.btn-primary {
+  background: var(--green);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-primary:hover { background: var(--green-dark); }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-ghost.small { padding: 6px 10px; font-size: 12px; }
+.btn-ghost.danger { color: var(--red); border-color: #EAD3D1; }
+.btn-ghost:hover { background: var(--bg); }
+
+.form-error {
+  color: var(--red);
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+/* ---------------------------------------------------------------------
+   Squad meta + callouts
+--------------------------------------------------------------------- */
+.squad-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.meta-chip {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.meta-value { font-family: var(--font-mono); font-weight: 700; font-size: 14px; }
+.squad-meta .btn-ghost { margin-left: auto; }
+.squad-meta .btn-ghost + .btn-ghost { margin-left: 0; }
+
+.callout {
+  background: var(--amber-pale);
+  border: 1px solid #EFD8AE;
+  color: var(--amber);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+.callout strong { color: inherit; }
+
+.empty-state {
+  text-align: center;
+  padding: 50px 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ---------------------------------------------------------------------
+   Pitch (signature element)
+--------------------------------------------------------------------- */
+.pitch-wrap {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.pitch {
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      var(--green) 0px, var(--green) 56px,
+      var(--green-dark) 56px, var(--green-dark) 112px
+    );
+  padding: 24px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 420px;
+  justify-content: space-evenly;
+  position: relative;
+}
+.pitch::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border: 1.5px solid rgba(255,255,255,0.35);
+  border-radius: 6px;
+  pointer-events: none;
+}
+.pitch-row {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
+}
+
+.player-card {
+  background: rgba(255,255,255,0.96);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  min-width: 96px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  position: relative;
+}
+.player-card .p-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+  margin: 0 auto;
+}
+.player-card .p-meta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.player-card .armband {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: var(--violet);
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bench-wrap { margin-top: 16px; }
+.section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.bench-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.bench-row .player-card { background: var(--bg); box-shadow: none; border: 1px solid var(--line); }
+
+/* ---------------------------------------------------------------------
+   Comparer
+--------------------------------------------------------------------- */
+.compare-search { position: relative; margin-bottom: 10px; }
+.table-scroll { overflow-x: auto; margin-top: 16px; }
+.compare-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.compare-table th, .compare-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+.compare-table th {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: var(--bg);
+}
+.compare-table td.stat-label { font-weight: 600; color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; }
+.compare-table td.best { color: var(--green-dark); font-weight: 700; }
+.compare-table tr:last-child td { border-bottom: none; }
+
+/* ---------------------------------------------------------------------
+   Login screen
+--------------------------------------------------------------------- */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.login-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 32px 28px;
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+}
+.login-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+}
+.login-card h1 { font-size: 20px; margin-bottom: 6px; }
+.login-card .muted { font-size: 13px; margin: 0 0 20px; }
+.login-card .field-row { text-align: left; }
+.full-width { width: 100%; }
+.login-note { font-size: 11.5px; margin-top: 14px; margin-bottom: 0; }
+
+/* ---------------------------------------------------------------------
+   Topbar logout button
+--------------------------------------------------------------------- */
+.topbar-inner .btn-ghost.small#logout-btn { margin-left: 4px; }
+
+/* ---------------------------------------------------------------------
+   FPL Help: fixture ticker
+--------------------------------------------------------------------- */
+.help-section-gap { margin-top: 36px; }
+.ticker-table td[class^="fd-"] {
+  text-align: center;
+  font-weight: 700;
+  font-size: 11.5px;
+}
+.fd-1 { background: #E1F4E6; color: var(--green-dark); }
+.fd-2 { background: #EFF7EA; color: var(--green-dark); }
+.fd-3 { background: var(--bg); color: var(--muted); }
+.fd-4 { background: var(--amber-pale); color: var(--amber); }
+.fd-5 { background: #FBE7E5; color: var(--red); }
+
+/* ---------------------------------------------------------------------
+   Footer
+--------------------------------------------------------------------- */
+.footer {
+  text-align: center;
+  padding: 30px 20px 50px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------------------
+   Responsive
+--------------------------------------------------------------------- */
+@media (max-width: 560px) {
+  .player-card { min-width: 82px; padding: 6px 8px; }
+  .player-card .p-name { max-width: 90px; font-size: 11.5px; }
+  .pitch { padding: 16px 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

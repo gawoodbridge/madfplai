@@ -1,0 +1,494 @@
+/* FPL Assistant - vanilla JS frontend. No frameworks, no build step. */
+
+const API = {
+  session: () => fetchJSON("/api/session"),
+  login: (body) => fetchJSON("/api/login", { method: "POST", body: JSON.stringify(body) }),
+  logout: () => fetchJSON("/api/logout", { method: "POST" }),
+  status: () => fetchJSON("/api/status"),
+  players: (params) => fetchJSON("/api/players?" + new URLSearchParams(params)),
+  squad: () => fetchJSON("/api/squad"),
+  submitGameweek: (body) => fetchJSON("/api/gameweek", { method: "POST", body: JSON.stringify(body) }),
+  compare: (ids) => fetchJSON("/api/compare", { method: "POST", body: JSON.stringify({ ids }) }),
+  reset: () => fetchJSON("/api/reset", { method: "POST" }),
+  differentials: (params) => fetchJSON("/api/differentials?" + new URLSearchParams(params)),
+  fixtureTicker: () => fetchJSON("/api/fixture-ticker"),
+};
+
+let sessionExpiredHandled = false;
+
+async function fetchJSON(url, opts = {}) {
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  if (res.status === 401 && !sessionExpiredHandled) {
+    sessionExpiredHandled = true;
+    location.reload();
+    throw new Error("Not authenticated");
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Request failed (${res.status})`);
+  }
+  return data;
+}
+
+const state = {
+  requiredPlayers: [], // {id, web_name, price, position}
+  comparePlayers: [],  // full player objects
+  helpLoaded: false,
+};
+
+// ------------------------------------------------------------- tabs ----
+document.getElementById("tabs").addEventListener("click", (e) => {
+  const btn = e.target.closest(".tab-btn");
+  if (!btn) return;
+  document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  const target = btn.dataset.tab;
+  document.getElementById("squad-tab").classList.toggle("hidden", target !== "squad");
+  document.getElementById("compare-tab").classList.toggle("hidden", target !== "compare");
+  document.getElementById("help-tab").classList.toggle("hidden", target !== "help");
+  if (target === "help") loadHelpTab();
+});
+
+// ------------------------------------------------------------- init ----
+init();
+
+async function init() {
+  wireLoginForm();
+  try {
+    const session = await API.session();
+    if (session.authenticated) {
+      showApp();
+      await startApp();
+    } else {
+      showLogin();
+    }
+  } catch (err) {
+    showLogin();
+  }
+}
+
+function showLogin() {
+  document.getElementById("login-screen").classList.remove("hidden");
+  document.getElementById("app-shell").classList.add("hidden");
+}
+
+function showApp() {
+  document.getElementById("login-screen").classList.add("hidden");
+  document.getElementById("app-shell").classList.remove("hidden");
+}
+
+function wireLoginForm() {
+  document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errBox = document.getElementById("login-error");
+    errBox.classList.add("hidden");
+    const submitBtn = document.getElementById("login-submit");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Signing in…";
+
+    const username = document.getElementById("login-username").value.trim();
+    const password = document.getElementById("login-password").value;
+
+    try {
+      await API.login({ username, password });
+      showApp();
+      await startApp();
+    } catch (err) {
+      errBox.textContent = "Incorrect username or password.";
+      errBox.classList.remove("hidden");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Sign in";
+    }
+  });
+}
+
+async function startApp() {
+  await refreshStatusAndSquad();
+  wireWeeklyForm();
+  wireRequiredSearch();
+  wireCompareSearch();
+  document.getElementById("reset-btn").addEventListener("click", onReset);
+  document.getElementById("change-gameweek-btn").addEventListener("click", () => {
+    document.getElementById("weekly-panel").classList.remove("hidden");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  document.getElementById("logout-btn").addEventListener("click", onLogout);
+}
+
+async function onLogout() {
+  try {
+    await API.logout();
+  } finally {
+    location.reload();
+  }
+}
+
+async function refreshStatusAndSquad() {
+  try {
+    const status = await API.status();
+    renderGwLabel(status);
+
+    const weeklyPanel = document.getElementById("weekly-panel");
+    const needsAnswer = status.needs_weekly_answer;
+    weeklyPanel.classList.toggle("hidden", !needsAnswer && status.has_squad);
+
+    document.getElementById("weekly-title").textContent = status.has_squad
+      ? "Update this gameweek"
+      : "Set up this gameweek";
+    document.getElementById("weekly-sub").textContent = status.has_squad
+      ? "Tell us your transfer budget for this gameweek."
+      : "First time here — tell us your budget to build your 15-man squad.";
+    document.getElementById("transfers-row").classList.toggle("hidden", !status.has_squad);
+    document.getElementById("full-transfers-toggle-wrap").classList.toggle("hidden", !status.has_squad);
+
+    if (status.has_squad) {
+      await loadSquad();
+    } else {
+      document.getElementById("squad-empty").classList.remove("hidden");
+      document.getElementById("squad-content").classList.add("hidden");
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function renderGwLabel(status) {
+  const label = document.getElementById("gw-label");
+  if (!status.gameweek) {
+    label.textContent = "No upcoming gameweek found";
+    return;
+  }
+  const deadline = status.deadline_time ? new Date(status.deadline_time) : null;
+  const deadlineStr = deadline ? deadline.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  label.textContent = `${status.gameweek_name || "Gameweek " + status.gameweek} · deadline ${deadlineStr}`;
+}
+
+// ------------------------------------------------------- weekly form ----
+function wireWeeklyForm() {
+  document.getElementById("weekly-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errBox = document.getElementById("weekly-error");
+    errBox.classList.add("hidden");
+    const submitBtn = document.getElementById("weekly-submit");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Crunching the numbers…";
+
+    const body = {
+      budget: parseFloat(document.getElementById("budget-input").value),
+      transfers_wanted: parseInt(document.getElementById("transfers-input").value || "0", 10),
+      formation: document.getElementById("formation-input").value || null,
+      required_player_ids: state.requiredPlayers.map((p) => p.id),
+      use_full_budget: document.getElementById("full-budget-toggle").checked,
+      use_full_transfers: document.getElementById("full-transfers-toggle").checked,
+    };
+
+    try {
+      const result = await API.submitGameweek(body);
+      document.getElementById("weekly-panel").classList.add("hidden");
+      renderTransferSummary(result);
+      renderSquadFromResult(result);
+      await refreshStatusAndSquad();
+    } catch (err) {
+      errBox.textContent = err.message;
+      errBox.classList.remove("hidden");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Build my team";
+    }
+  });
+}
+
+function renderTransferSummary(result) {
+  const box = document.getElementById("transfer-summary");
+  if (result.mode !== "transfer") {
+    box.classList.add("hidden");
+    return;
+  }
+  const s = result.transfer_summary;
+  if (!s.swaps.length) {
+    box.innerHTML = `<strong>No transfers made.</strong> ${s.message}`;
+    box.classList.remove("hidden");
+    return;
+  }
+  const rows = s.swaps.map(
+    (sw) => `${sw.out.web_name} &rarr; ${sw.in.web_name}`
+  ).join(", ");
+  box.innerHTML = `<strong>${s.recommended_count} transfer(s) made:</strong> ${rows}.
+    Projected gain ${s.total_score_gain} pts${s.point_hit ? `, minus a ${s.point_hit}pt hit` : ""} = net ${s.net_gain}. ${s.message}`;
+  box.classList.remove("hidden");
+}
+
+// --------------------------------------------------------- squad ui ----
+async function loadSquad() {
+  const data = await API.squad();
+  if (!data.squad) {
+    document.getElementById("squad-empty").classList.remove("hidden");
+    document.getElementById("squad-content").classList.add("hidden");
+    if (data.warning) alert(data.warning);
+    return;
+  }
+  renderSquadFromResult({
+    formation: data.squad.formation,
+    starting: data.squad.starting,
+    bench: data.squad.bench,
+    captain: data.squad.captain,
+    vice_captain: data.squad.vice_captain,
+  }, data.squad);
+}
+
+function renderSquadFromResult(result, squadMeta) {
+  document.getElementById("squad-empty").classList.add("hidden");
+  document.getElementById("squad-content").classList.remove("hidden");
+
+  document.getElementById("meta-formation").textContent = result.formation;
+  if (squadMeta) {
+    document.getElementById("meta-bank").textContent = `£${squadMeta.bank}m`;
+    document.getElementById("meta-ft").textContent = squadMeta.free_transfers;
+  }
+
+  const pitch = document.getElementById("pitch");
+  pitch.innerHTML = "";
+  const order = ["GK", "DEF", "MID", "FWD"];
+  order.forEach((pos) => {
+    const players = result.starting.filter((p) => p.position === pos);
+    if (!players.length) return;
+    const row = document.createElement("div");
+    row.className = "pitch-row";
+    players.forEach((p) => row.appendChild(playerCard(p, result)));
+    pitch.appendChild(row);
+  });
+
+  const benchRow = document.getElementById("bench-row");
+  benchRow.innerHTML = "";
+  result.bench.forEach((p) => benchRow.appendChild(playerCard(p, result)));
+}
+
+function playerCard(p, result) {
+  const card = document.createElement("div");
+  card.className = "player-card";
+  const isCaptain = result.captain && p.id === result.captain.id;
+  const isVice = result.vice_captain && p.id === result.vice_captain.id;
+  card.innerHTML = `
+    ${isCaptain ? '<span class="armband" title="Captain">C</span>' : isVice ? '<span class="armband" title="Vice-captain">V</span>' : ""}
+    <div class="p-name">${p.web_name}</div>
+    <div class="p-meta">${p.team_short} · £${p.price}m</div>
+  `;
+  return card;
+}
+
+async function onReset() {
+  if (!confirm("This clears your saved squad and gameweek history. Continue?")) return;
+  await API.reset();
+  location.reload();
+}
+
+// ---------------------------------------------------- required search ----
+function wireRequiredSearch() {
+  const input = document.getElementById("required-search");
+  const suggestBox = document.getElementById("required-suggestions");
+
+  input.addEventListener("input", debounce(async () => {
+    const q = input.value.trim();
+    if (q.length < 2) { suggestBox.classList.add("hidden"); return; }
+    const { players } = await API.players({ search: q });
+    renderSuggestions(suggestBox, players.slice(0, 8), (p) => {
+      if (!state.requiredPlayers.find((x) => x.id === p.id)) {
+        state.requiredPlayers.push(p);
+        renderRequiredChips();
+      }
+      input.value = "";
+      suggestBox.classList.add("hidden");
+    });
+  }, 250));
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#required-search") && !e.target.closest("#required-suggestions")) {
+      suggestBox.classList.add("hidden");
+    }
+  });
+}
+
+function renderRequiredChips() {
+  const box = document.getElementById("required-chips");
+  box.innerHTML = "";
+  state.requiredPlayers.forEach((p) => {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.innerHTML = `${p.web_name} <button type="button" aria-label="Remove">&times;</button>`;
+    chip.querySelector("button").addEventListener("click", () => {
+      state.requiredPlayers = state.requiredPlayers.filter((x) => x.id !== p.id);
+      renderRequiredChips();
+    });
+    box.appendChild(chip);
+  });
+}
+
+// ---------------------------------------------------------- comparer ----
+function wireCompareSearch() {
+  const input = document.getElementById("compare-search");
+  const suggestBox = document.getElementById("compare-suggestions");
+
+  input.addEventListener("input", debounce(async () => {
+    const q = input.value.trim();
+    if (q.length < 2) { suggestBox.classList.add("hidden"); return; }
+    const { players } = await API.players({ search: q });
+    renderSuggestions(suggestBox, players.slice(0, 8), (p) => {
+      if (!state.comparePlayers.find((x) => x.id === p.id)) {
+        state.comparePlayers.push(p);
+        renderCompareChips();
+        renderCompareTable();
+      }
+      input.value = "";
+      suggestBox.classList.add("hidden");
+    });
+  }, 250));
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#compare-search") && !e.target.closest("#compare-suggestions")) {
+      suggestBox.classList.add("hidden");
+    }
+  });
+}
+
+function renderCompareChips() {
+  const box = document.getElementById("compare-chips");
+  box.innerHTML = "";
+  state.comparePlayers.forEach((p) => {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.innerHTML = `${p.web_name} <button type="button" aria-label="Remove">&times;</button>`;
+    chip.querySelector("button").addEventListener("click", () => {
+      state.comparePlayers = state.comparePlayers.filter((x) => x.id !== p.id);
+      renderCompareChips();
+      renderCompareTable();
+    });
+    box.appendChild(chip);
+  });
+}
+
+const COMPARE_STATS = [
+  { key: "team_short", label: "Club", better: null },
+  { key: "position", label: "Position", better: null },
+  { key: "price", label: "Price (£m)", better: "low" },
+  { key: "form", label: "Form", better: "high" },
+  { key: "total_points", label: "Total points", better: "high" },
+  { key: "points_per_game", label: "Points / game", better: "high" },
+  { key: "expected_goals", label: "Expected goals", better: "high" },
+  { key: "expected_assists", label: "Expected assists", better: "high" },
+  { key: "goals_scored", label: "Goals", better: "high" },
+  { key: "assists", label: "Assists", better: "high" },
+  { key: "clean_sheets", label: "Clean sheets", better: "high" },
+  { key: "ict_index", label: "ICT index", better: "high" },
+  { key: "fixture_difficulty", label: "Upcoming fixture difficulty", better: "low" },
+  { key: "selected_by_percent", label: "Selected by (%)", better: null },
+  { key: "score", label: "Overall rating", better: "high" },
+];
+
+function renderCompareTable() {
+  const table = document.getElementById("compare-table");
+  const empty = document.getElementById("compare-empty");
+  const head = document.getElementById("compare-head");
+  const body = document.getElementById("compare-body");
+
+  if (state.comparePlayers.length < 1) {
+    table.classList.add("hidden");
+    empty.classList.remove("hidden");
+    return;
+  }
+  empty.classList.add("hidden");
+  table.classList.remove("hidden");
+
+  head.innerHTML = `<th>Stat</th>` + state.comparePlayers.map((p) => `<th>${p.web_name}</th>`).join("");
+
+  body.innerHTML = "";
+  COMPARE_STATS.forEach((stat) => {
+    const values = state.comparePlayers.map((p) => p[stat.key]);
+    let bestValue = null;
+    if (stat.better && values.every((v) => typeof v === "number")) {
+      bestValue = stat.better === "high" ? Math.max(...values) : Math.min(...values);
+    }
+    const row = document.createElement("tr");
+    row.innerHTML = `<td class="stat-label">${stat.label}</td>` + values.map((v) => {
+      const isBest = bestValue !== null && v === bestValue;
+      return `<td class="${isBest ? "best" : ""}">${v}</td>`;
+    }).join("");
+    body.appendChild(row);
+  });
+}
+
+// ------------------------------------------------------------ fpl help ----
+async function loadHelpTab() {
+  if (state.helpLoaded) return;
+  state.helpLoaded = true;
+
+  try {
+    const diff = await API.differentials({ max_ownership: 10 });
+    renderDifferentials(diff.players);
+  } catch (err) {
+    console.error(err);
+  }
+
+  try {
+    const ticker = await API.fixtureTicker();
+    renderFixtureTicker(ticker.teams);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function renderDifferentials(players) {
+  const body = document.getElementById("differentials-body");
+  body.innerHTML = "";
+  players.slice(0, 15).forEach((p) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${p.web_name}</td>
+      <td>${p.team_short}</td>
+      <td>${p.position}</td>
+      <td>£${p.price}m</td>
+      <td>${p.selected_by_percent}%</td>
+      <td>${p.score}</td>
+    `;
+    body.appendChild(row);
+  });
+}
+
+function renderFixtureTicker(teams) {
+  const body = document.getElementById("ticker-body");
+  body.innerHTML = "";
+  teams.forEach((t) => {
+    const row = document.createElement("tr");
+    const cells = t.fixtures.slice(0, 5).map((f) => {
+      const label = (f.is_home ? "" : "@") + f.opponent_short;
+      return `<td class="fd-${f.difficulty}">${label}</td>`;
+    }).join("");
+    row.innerHTML = `<td class="stat-label">${t.team_short}</td>${cells}`;
+    body.appendChild(row);
+  });
+}
+
+// ------------------------------------------------------------ shared ----
+function renderSuggestions(box, players, onPick) {
+  if (!players.length) { box.classList.add("hidden"); return; }
+  box.innerHTML = "";
+  players.forEach((p) => {
+    const item = document.createElement("div");
+    item.className = "suggestion-item";
+    item.innerHTML = `<span>${p.web_name} <span class="muted">(${p.team_short}, ${p.position})</span></span><span class="s-price">£${p.price}m</span>`;
+    item.addEventListener("click", () => onPick(p));
+    box.appendChild(item);
+  });
+  box.classList.remove("hidden");
+}
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}

@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: fpl-assistant
+    runtime: python
+    plan: free
+    buildCommand: "true"          # no dependencies to install
+    startCommand: "python3 backend/server.py"
+    envVars:
+      - key: FPL_USERS
+        sync: false               # set this yourself in the Render dashboard
+                                   # format: username:password,username2:password2
