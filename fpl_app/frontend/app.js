@@ -2,6 +2,7 @@
 
 const API = {
   session: () => fetchJSON("/api/session"),
+  teams: () => fetchJSON("/api/teams"),
   login: (body) => fetchJSON("/api/login", { method: "POST", body: JSON.stringify(body) }),
   logout: () => fetchJSON("/api/logout", { method: "POST" }),
   status: () => fetchJSON("/api/status"),
