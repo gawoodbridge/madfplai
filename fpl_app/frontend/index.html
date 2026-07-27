@@ -26,7 +26,7 @@
 
     <button type="submit" class="btn-primary full-width" id="login-submit">Sign in</button>
     <p class="form-error hidden" id="login-error"></p>
-    <p class="login-note muted">This is cheating, do not use it in the Mays Thai Manly West FPL league. </p>
+    <p class="login-note muted">Accounts are set up by the admin - there's no self sign-up.</p>
   </form>
 </div>
 
@@ -45,9 +45,9 @@
     <nav class="tabs" id="tabs">
       <button class="tab-btn active" data-tab="squad">Squad</button>
       <button class="tab-btn" data-tab="compare">Compare players</button>
-      <button class="tab-btn" data-tab="help">FPL Help</button>
       <button class="tab-btn" data-tab="browse">All players</button>
       <button class="tab-btn" data-tab="analyser">Team Analyser</button>
+      <button class="tab-btn" data-tab="help">FPL Help</button>
     </nav>
     <button class="btn-ghost small" id="logout-btn" title="Sign out">Sign out</button>
   </div>
@@ -124,44 +124,6 @@
     </form>
   </section>
 
-
-
-  <section id="analyser-tab" class="tab-panel hidden">
-  <div class="panel-head">
-    <h2>Team Analyser</h2>
-    <p class="muted">A deeper look at your saved squad — balance, value and risk.</p>
-  </div>
-
-  <div id="analyser-empty" class="empty-state hidden">
-    <p>Build a squad first to see your analysis.</p>
-  </div>
-
-  <div id="analyser-content" class="hidden">
-    <div class="squad-meta" id="analyser-summary-chips"></div>
-
-    <div class="panel-head help-section-gap">
-      <h2>Position breakdown</h2>
-    </div>
-    <div class="table-scroll">
-      <table class="compare-table">
-        <thead><tr><th>Position</th><th>Players</th><th>Avg rating</th><th>Total spend</th></tr></thead>
-        <tbody id="analyser-position-body"></tbody>
-      </table>
-    </div>
-
-    <div class="panel-head help-section-gap">
-      <h2>Club concentration</h2>
-    </div>
-    <div id="analyser-clubs" class="chips"></div>
-
-    <div class="panel-head help-section-gap">
-      <h2>Risk flags</h2>
-      <p class="muted">Players currently flagged as doubtful, injured or suspended.</p>
-    </div>
-    <div id="analyser-risks"></div>
-  </div>
-</section>
-
   <!-- ============================== SQUAD / PITCH VIEW ============================== -->
   <section id="squad-tab" class="tab-panel">
 
@@ -218,51 +180,89 @@
     </div>
   </section>
 
-
-
+  <!-- ============================== ALL PLAYERS ============================== -->
   <section id="browse-tab" class="tab-panel hidden">
-  <div class="panel-head">
-    <h2>All players</h2>
-    <p class="muted">Search and filter the full player database.</p>
-  </div>
+    <div class="panel-head">
+      <h2>All players</h2>
+      <p class="muted">Search and filter the full player database.</p>
+    </div>
 
-  <div class="filter-row">
-    <input type="text" id="browse-search" placeholder="Search a player…" autocomplete="off">
-    <select id="browse-position">
-      <option value="">All positions</option>
-      <option value="GK">GK</option>
-      <option value="DEF">DEF</option>
-      <option value="MID">MID</option>
-      <option value="FWD">FWD</option>
-    </select>
-    <select id="browse-team">
-      <option value="">All teams</option>
-    </select>
-    <input type="number" id="browse-min-price" placeholder="Min £m" step="0.1" min="0">
-    <input type="number" id="browse-max-price" placeholder="Max £m" step="0.1" min="0">
-    <select id="browse-sort">
-  <option value="score">Rating</option>
-  <option value="form">Form</option>
-  <option value="total_points">Total points</option>
-  <option value="price">Price</option>
-  <option value="selected_by_percent">Ownership %</option>
-  <option value="ict_index">ICT index</option>
-</select>
-<select id="browse-order">
-  <option value="desc">High → Low</option>
-  <option value="asc">Low → High</option>
-</select>
-  </div>
+    <div class="filter-row">
+      <input type="text" id="browse-search" placeholder="Search a player&hellip;" autocomplete="off">
+      <select id="browse-position">
+        <option value="">All positions</option>
+        <option value="GK">GK</option>
+        <option value="DEF">DEF</option>
+        <option value="MID">MID</option>
+        <option value="FWD">FWD</option>
+      </select>
+      <select id="browse-team">
+        <option value="">All teams</option>
+      </select>
+      <input type="number" id="browse-min-price" placeholder="Min £m" step="0.1" min="0">
+      <input type="number" id="browse-max-price" placeholder="Max £m" step="0.1" min="0">
+      <select id="browse-sort">
+        <option value="score">Rating</option>
+        <option value="form">Form</option>
+        <option value="total_points">Total points</option>
+        <option value="price">Price</option>
+        <option value="selected_by_percent">Ownership %</option>
+        <option value="ict_index">ICT index</option>
+      </select>
+      <select id="browse-order">
+        <option value="desc">High &rarr; Low</option>
+        <option value="asc">Low &rarr; High</option>
+      </select>
+    </div>
 
-  <div class="table-scroll">
-    <table class="compare-table">
-      <thead>
-        <tr><th>Player</th><th>Club</th><th>Pos</th><th>Price</th><th>Form</th><th>Points</th><th>Rating</th></tr>
-      </thead>
-      <tbody id="browse-body"></tbody>
-    </table>
-  </div>
-</section>
+    <div class="table-scroll">
+      <table class="compare-table">
+        <thead>
+          <tr><th>Player</th><th>Club</th><th>Pos</th><th>Price</th><th>Form</th><th>Points</th><th>Rating</th></tr>
+        </thead>
+        <tbody id="browse-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================== TEAM ANALYSER ============================== -->
+  <section id="analyser-tab" class="tab-panel hidden">
+    <div class="panel-head">
+      <h2>Team Analyser</h2>
+      <p class="muted">A deeper look at your saved squad — balance, value and risk.</p>
+    </div>
+
+    <div id="analyser-empty" class="empty-state hidden">
+      <p>Build a squad first to see your analysis.</p>
+    </div>
+
+    <div id="analyser-content" class="hidden">
+      <div class="squad-meta" id="analyser-summary-chips"></div>
+
+      <div class="panel-head help-section-gap">
+        <h2>Position breakdown</h2>
+      </div>
+      <div class="table-scroll">
+        <table class="compare-table">
+          <thead>
+            <tr><th>Position</th><th>Players</th><th>Avg rating</th><th>Total spend</th></tr>
+          </thead>
+          <tbody id="analyser-position-body"></tbody>
+        </table>
+      </div>
+
+      <div class="panel-head help-section-gap">
+        <h2>Club concentration</h2>
+      </div>
+      <div id="analyser-clubs" class="chips"></div>
+
+      <div class="panel-head help-section-gap">
+        <h2>Risk flags</h2>
+        <p class="muted">Players currently flagged as doubtful, injured or suspended.</p>
+      </div>
+      <div id="analyser-risks"></div>
+    </div>
+  </section>
 
   <!-- ============================== FPL HELP ============================== -->
   <section id="help-tab" class="tab-panel hidden">
