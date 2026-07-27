@@ -267,6 +267,15 @@ class Handler(BaseHTTPRequestHandler):
     results = sorted(results, key=lambda p: p["score"], reverse=True)
     self._send_json({"players": results[:500]})
 
+
+    def _handle_teams(self):
+    _, bootstrap = get_rated_players()
+    teams = sorted(
+        [{"id": t["id"], "short_name": t["short_name"], "name": t["name"]} for t in bootstrap["teams"]],
+        key=lambda t: t["name"]
+    )
+    self._send_json({"teams": teams})
+
     def _handle_differentials(self, query):
         """
         FPL-help feature: low-ownership, high-score players worth a punt -
