@@ -51,6 +51,8 @@ document.getElementById("tabs").addEventListener("click", (e) => {
   document.getElementById("compare-tab").classList.toggle("hidden", target !== "compare");
   document.getElementById("help-tab").classList.toggle("hidden", target !== "help");
   if (target === "help") loadHelpTab();
+  document.getElementById("browse-tab").classList.toggle("hidden", target !== "browse");
+  if (target === "browse") loadBrowseTab();
 });
 
 // ------------------------------------------------------------- init ----
