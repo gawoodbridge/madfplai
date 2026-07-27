@@ -148,9 +148,6 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/session":
                 return self._handle_session()
 
-            if path == "/api/teams":
-                return self._handle_teams()
-
             if path.startswith("/api/"):
                 username = self._current_username()
                 if username is None:
@@ -159,6 +156,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._handle_status(username)
                 if path == "/api/players":
                     return self._handle_players(query)
+                if path == "/api/teams":
+                    return self._handle_teams()
                 if path == "/api/squad":
                     return self._handle_get_squad(username)
                 if path == "/api/differentials":
@@ -248,36 +247,35 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_players(self, query):
         rated_players, _ = get_rated_players()
-    position = (query.get("position") or [None])[0]
-    search = (query.get("search") or [None])[0]
-    team = (query.get("team") or [None])[0]
-    min_price = (query.get("min_price") or [None])[0]
-    max_price = (query.get("max_price") or [None])[0]
+        position = (query.get("position") or [None])[0]
+        search = (query.get("search") or [None])[0]
+        team = (query.get("team") or [None])[0]
+        min_price = (query.get("min_price") or [None])[0]
+        max_price = (query.get("max_price") or [None])[0]
 
-    results = rated_players
-    if position:
-        results = [p for p in results if p["position"] == position.upper()]
-    if search:
-        s = search.lower()
-        results = [p for p in results if s in p["web_name"].lower() or s in p["full_name"].lower()]
-    if team:
-        results = [p for p in results if p["team_short"].lower() == team.lower()]
-    if min_price:
-        results = [p for p in results if p["price"] >= float(min_price)]
-    if max_price:
-        results = [p for p in results if p["price"] <= float(max_price)]
+        results = rated_players
+        if position:
+            results = [p for p in results if p["position"] == position.upper()]
+        if search:
+            s = search.lower()
+            results = [p for p in results if s in p["web_name"].lower() or s in p["full_name"].lower()]
+        if team:
+            results = [p for p in results if p["team_short"].lower() == team.lower()]
+        if min_price:
+            results = [p for p in results if p["price"] >= float(min_price)]
+        if max_price:
+            results = [p for p in results if p["price"] <= float(max_price)]
 
-    results = sorted(results, key=lambda p: p["score"], reverse=True)
-    self._send_json({"players": results[:500]})
-
+        results = sorted(results, key=lambda p: p["score"], reverse=True)
+        self._send_json({"players": results[:500]})
 
     def _handle_teams(self):
-    _, bootstrap = get_rated_players()
-    teams = sorted(
-        [{"id": t["id"], "short_name": t["short_name"], "name": t["name"]} for t in bootstrap["teams"]],
-        key=lambda t: t["name"]
-    )
-    self._send_json({"teams": teams})
+        _, bootstrap = get_rated_players()
+        teams = sorted(
+            [{"id": t["id"], "short_name": t["short_name"], "name": t["name"]} for t in bootstrap["teams"]],
+            key=lambda t: t["name"],
+        )
+        self._send_json({"teams": teams})
 
     def _handle_differentials(self, query):
         """
