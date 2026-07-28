@@ -15,6 +15,8 @@ const API = {
   teams: () => fetchJSON("/api/teams"),
   // Accept optional teamId (club id) to analyse a club, or no arg to analyse the user's saved squad
   teamAnalysis: (teamId) => fetchJSON("/api/team-analysis" + (teamId ? ("?team_id=" + encodeURIComponent(teamId)) : "")),
+  // Custom team analysis: POSTs { player_ids: [...] }
+  customTeamAnalysis: (playerIds) => fetchJSON("/api/team-analysis", { method: "POST", body: JSON.stringify({ player_ids: playerIds }) }),
 };
 
 let sessionExpiredHandled = false;
@@ -40,6 +42,7 @@ const state = {
   requiredPlayers: [], // {id, web_name, price, position}
   comparePlayers: [],  // full player objects
   helpLoaded: false,
+  customTeam: [],      // custom team players for analyser
 };
 
 // ------------------------------------------------------------- tabs ----
@@ -118,6 +121,7 @@ async function startApp() {
   wireWeeklyForm();
   wireRequiredSearch();
   wireCompareSearch();
+  wireCustomAnalyser(); // hook up custom analyser controls
   document.getElementById("reset-btn").addEventListener("click", onReset);
   document.getElementById("change-gameweek-btn").addEventListener("click", () => {
     document.getElementById("weekly-panel").classList.remove("hidden");
@@ -646,9 +650,94 @@ function renderAnalyser(data) {
   }
 }
 
+// -------------------------------------------------- custom team analyser UI ----
+// Renders the chips for the custom team
+function renderCustomTeamList() {
+  const box = document.getElementById("analyser-custom-list");
+  if (!box) return;
+  box.innerHTML = "";
+  state.customTeam.forEach((p) => {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.innerHTML = `${p.web_name} <button type="button" aria-label="Remove">&times;</button>`;
+    chip.querySelector("button").addEventListener("click", () => {
+      state.customTeam = state.customTeam.filter((x) => x.id !== p.id);
+      renderCustomTeamList();
+    });
+    box.appendChild(chip);
+  });
+}
+
+// Wire the custom analyser search + actions
+function wireCustomAnalyser() {
+  const input = document.getElementById("analyser-custom-search");
+  const suggestBox = document.getElementById("analyser-custom-suggestions");
+  if (!input) return;
+
+  input.addEventListener("input", debounce(async () => {
+    const q = input.value.trim();
+    if (q.length < 2) { if (suggestBox) suggestBox.classList.add("hidden"); return; }
+    try {
+      const { players } = await API.players({ search: q });
+      renderSuggestions(suggestBox, players.slice(0, 8), (p) => {
+        if (!state.customTeam.find((x) => x.id === p.id)) {
+          if (state.customTeam.length >= 15) {
+            alert("Custom team is limited to 15 players.");
+          } else {
+            state.customTeam.push(p);
+            renderCustomTeamList();
+          }
+        }
+        input.value = "";
+        if (suggestBox) suggestBox.classList.add("hidden");
+      });
+    } catch (err) {
+      console.error("Failed to search players:", err);
+    }
+  }, 250));
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#analyser-custom-search") && !e.target.closest("#analyser-custom-suggestions")) {
+      if (suggestBox) suggestBox.classList.add("hidden");
+    }
+  });
+
+  const clearBtn = document.getElementById("analyser-custom-clear");
+  if (clearBtn) {
+    clearBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      state.customTeam = [];
+      renderCustomTeamList();
+    });
+  }
+
+  const analyzeBtn = document.getElementById("analyser-custom-analyze");
+  if (analyzeBtn) {
+    analyzeBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      if (state.customTeam.length === 0) {
+        alert("Add at least one player to analyse.");
+        return;
+      }
+      analyzeBtn.disabled = true;
+      try {
+        const ids = state.customTeam.map((p) => p.id);
+        const data = await API.customTeamAnalysis(ids);
+        renderAnalyser(data);
+      } catch (err) {
+        console.error("Custom team analysis failed:", err);
+        alert(err.message || "Failed to analyse custom team");
+      } finally {
+        analyzeBtn.disabled = false;
+      }
+    });
+  }
+}
+
 // ------------------------------------------------------------ shared ----
 function renderSuggestions(box, players, onPick) {
-  if (!players.length) { box.classList.add("hidden"); return; }
+  if (!box) return;
+  if (!players || !players.length) { box.classList.add("hidden"); return; }
   box.innerHTML = "";
   players.forEach((p) => {
     const item = document.createElement("div");
