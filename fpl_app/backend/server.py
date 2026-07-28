@@ -191,6 +191,10 @@ class Handler(BaseHTTPRequestHandler):
             if username is None:
                 return self._send_error_json("Not authenticated", 401)
 
+            # Custom-team analysis (user-supplied player ids)
+            if path == "/api/team-analysis":
+                return self._handle_team_analysis_post(body, username)
+
             if path == "/api/logout":
                 return self._handle_logout()
             if path == "/api/gameweek":
@@ -452,6 +456,7 @@ class Handler(BaseHTTPRequestHandler):
         data_store.reset_user_data(username)
         self._send_json({"message": "Squad and gameweek history cleared."})
 
+    # ----------------------------- GET team analysis (existing saved squad or club) --
     def _handle_team_analysis(self, query, username):
         """
         Analyse either:
@@ -554,6 +559,92 @@ class Handler(BaseHTTPRequestHandler):
         lineup_result = lineup.pick_starting_xi(fresh_squad, squad.get("formation"))
         starting = lineup_result.get("starting", [])
         bench = lineup_result.get("bench", [])
+        analysis = compute_analysis(starting, bench)
+        self._send_json(analysis)
+
+    # ----------------------------- POST team analysis for custom teams ----
+    def _handle_team_analysis_post(self, body, username):
+        """
+        Analyse a custom team supplied by player ids:
+          POST /api/team-analysis  { player_ids: [1,2,3,...] }
+        Returns the same JSON shape used by the frontend analyser.
+        """
+        player_ids = body.get("player_ids", [])
+        if not isinstance(player_ids, list) or not player_ids:
+            return self._send_error_json("player_ids must be a non-empty list", 400)
+        if len(player_ids) > 15:
+            return self._send_error_json("Maximum 15 players allowed for custom team", 400)
+
+        rated_players, _ = get_rated_players()
+        by_id = players_by_id(rated_players)
+        try:
+            ids_int = [int(x) for x in player_ids]
+        except (TypeError, ValueError):
+            return self._send_error_json("player_ids must be integers", 400)
+
+        players = []
+        missing = []
+        for pid in ids_int:
+            p = by_id.get(pid)
+            if p:
+                players.append(p)
+            else:
+                missing.append(pid)
+
+        if missing:
+            return self._send_error_json(f"Some player IDs not found: {', '.join(map(str, missing))}", 422)
+
+        # pick starting XI and bench from the provided players using existing lineup logic
+        lineup_result = lineup.pick_starting_xi(players, None)
+        starting = lineup_result.get("starting", [])
+        bench = lineup_result.get("bench", [])
+
+        # compute analysis (same logic as the GET handler)
+        def compute_analysis(starting, bench):
+            combined = list(starting) + list(bench)
+            total_score = round(sum(float(p.get("score", 0.0)) for p in starting), 3)
+            total_value = round(sum(float(p.get("price", 0.0)) for p in combined), 1) if combined else 0.0
+            spend_efficiency = round(total_score / total_value, 3) if total_value else None
+            starting_fixture_difficulty = None
+            if starting:
+                starting_fixture_difficulty = round(sum(float(p.get("fixture_difficulty", 0.0)) for p in starting) / len(starting), 2)
+
+            position_breakdown = {}
+            for p in starting:
+                pos = p.get("position", "UNK")
+                stats = position_breakdown.setdefault(pos, {"count": 0, "avg_score": 0.0, "total_price": 0.0})
+                stats["count"] += 1
+                stats["avg_score"] += float(p.get("score", 0.0))
+                stats["total_price"] += float(p.get("price", 0.0))
+            for pos, s in position_breakdown.items():
+                s["avg_score"] = round(s["avg_score"] / s["count"], 3) if s["count"] else 0.0
+                s["total_price"] = round(s["total_price"], 1)
+
+            club_counts = {}
+            for p in combined:
+                key = p.get("team_short") or p.get("team_name") or "?"
+                club_counts[key] = club_counts.get(key, 0) + 1
+            club_breakdown = [{"team": k, "count": v} for k, v in sorted(club_counts.items(), key=lambda x: (-x[1], x[0]))]
+
+            risk_flags = []
+            for p in combined:
+                if p.get("news") or (p.get("status") and p.get("status") != "a"):
+                    risk_flags.append({
+                        "web_name": p.get("web_name"),
+                        "status": p.get("status"),
+                        "news": p.get("news", "")
+                    })
+
+            return {
+                "total_score": total_score,
+                "total_value": total_value,
+                "spend_efficiency": spend_efficiency,
+                "starting_fixture_difficulty": starting_fixture_difficulty,
+                "position_breakdown": position_breakdown,
+                "club_breakdown": club_breakdown,
+                "risk_flags": risk_flags,
+            }
+
         analysis = compute_analysis(starting, bench)
         self._send_json(analysis)
 
