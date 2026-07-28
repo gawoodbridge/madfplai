@@ -26,6 +26,7 @@
 
     <button type="submit" class="btn-primary full-width" id="login-submit">Sign in</button>
     <p class="form-error hidden" id="login-error"></p>
+    <p class="login-note muted">Accounts are set up by the admin - there's no self sign-up.</p>
   </form>
 </div>
 
@@ -154,42 +155,6 @@
     </div>
   </section>
 
-
-
-  <section id="analyser-tab" class="tab-panel hidden">
-  <div class="panel-head">
-    <h2>Team Analyser</h2>
-    <p class="muted">Pick a team from the database or supply player IDs to run the Python analysis.</p>
-  </div>
-
-  <div class="field-row">
-    <label for="analyser-team-select"><span>Pick a team</span></label>
-    <select id="analyser-team-select">
-      <option value="">-- Select a team --</option>
-    </select>
-  </div>
-
-  <div class="field-row">
-    <button id="analyser-run-team" class="btn-primary">Analyse selected team</button>
-  </div>
-
-  <div class="panel-head" style="margin-top:16px;">
-    <h3>Or analyse a custom team</h3>
-    <p class="muted">Comma-separated player IDs (e.g. 1,23,456)</p>
-  </div>
-  <div class="field-row">
-    <input type="text" id="analyser-custom-players" placeholder="player ids,comma,separated" />
-    <div style="margin-top:8px;">
-      <button id="analyser-run-custom" class="btn-ghost">Analyse custom team</button>
-    </div>
-  </div>
-
-  <div id="analyser-results" class="panel hidden" style="margin-top:18px;">
-    <div class="panel-head"><h3>Analysis</h3></div>
-    <div id="analyser-results-body" style="white-space:pre-wrap; font-family:var(--font-mono);"></div>
-  </div>
-</section>
-
   <!-- ============================== COMPARER ============================== -->
   <section id="compare-tab" class="tab-panel hidden">
     <div class="panel-head">
@@ -267,7 +232,7 @@
       <p class="muted">A deeper look at your saved squad — balance, value and risk.</p>
     </div>
 
-    <!-- Existing: team picker for analyser -->
+    <!-- Team picker for analyser -->
     <div class="field-row analyser-picker">
       <label for="analyser-team-select">
         <span>Analyse team</span>
@@ -281,26 +246,20 @@
       </div>
     </div>
 
-    <!-- New: custom team builder (separate from the team builder) -->
-    <div class="panel-head help-section-gap">
-      <h3>Create custom team</h3>
-      <p class="muted">Search and add up to 15 players to build a custom team for analysis (does not affect your saved squad).</p>
-    </div>
-    <div class="field-row custom-analyser">
+    <!-- Custom team: search by player name (autocomplete + chips) -->
+    <div class="field-row">
       <label for="analyser-custom-search">
-        <span>Search players</span>
-        <span class="hint">Type a name to add players to your custom team</span>
+        <span>Custom team (search players)</span>
+        <span class="hint">Search and add players by name — picks will be sent to the analyser</span>
       </label>
       <div class="required-picker" style="margin-top:8px;">
-        <input type="text" id="analyser-custom-search" placeholder="Search a player to add&hellip;" autocomplete="off">
+        <input type="text" id="analyser-custom-search" placeholder="Search players to add…" autocomplete="off">
         <div id="analyser-custom-suggestions" class="suggestions hidden"></div>
-        <div id="analyser-custom-list" class="chips"></div>
+        <div id="analyser-custom-chips" class="chips"></div>
       </div>
-      <div style="margin-top:8px;display:flex;gap:8px;">
-        <button class="btn-primary" id="analyser-custom-analyze">Analyze custom team</button>
-        <button class="btn-ghost" id="analyser-custom-clear">Clear</button>
+      <div style="margin-top:8px;">
+        <button id="analyser-run-custom" class="btn-ghost">Analyse custom team</button>
       </div>
-      <p class="muted" id="analyser-custom-note">You can add up to 15 players. The app will pick a starting XI automatically for analysis.</p>
     </div>
 
     <div id="analyser-empty" class="empty-state hidden">
