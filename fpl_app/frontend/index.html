@@ -232,7 +232,7 @@
       <p class="muted">A deeper look at your saved squad — balance, value and risk.</p>
     </div>
 
-    <!-- New: team picker for analyser -->
+    <!-- Existing: team picker for analyser -->
     <div class="field-row analyser-picker">
       <label for="analyser-team-select">
         <span>Analyse team</span>
@@ -244,6 +244,28 @@
         </select>
         <button class="btn-primary" id="analyser-load-btn">Analyze</button>
       </div>
+    </div>
+
+    <!-- New: custom team builder (separate from the team builder) -->
+    <div class="panel-head help-section-gap">
+      <h3>Create custom team</h3>
+      <p class="muted">Search and add up to 15 players to build a custom team for analysis (does not affect your saved squad).</p>
+    </div>
+    <div class="field-row custom-analyser">
+      <label for="analyser-custom-search">
+        <span>Search players</span>
+        <span class="hint">Type a name to add players to your custom team</span>
+      </label>
+      <div class="required-picker" style="margin-top:8px;">
+        <input type="text" id="analyser-custom-search" placeholder="Search a player to add&hellip;" autocomplete="off">
+        <div id="analyser-custom-suggestions" class="suggestions hidden"></div>
+        <div id="analyser-custom-list" class="chips"></div>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px;">
+        <button class="btn-primary" id="analyser-custom-analyze">Analyze custom team</button>
+        <button class="btn-ghost" id="analyser-custom-clear">Clear</button>
+      </div>
+      <p class="muted" id="analyser-custom-note">You can add up to 15 players. The app will pick a starting XI automatically for analysis.</p>
     </div>
 
     <div id="analyser-empty" class="empty-state hidden">
