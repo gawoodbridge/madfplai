@@ -756,3 +756,107 @@ function debounce(fn, ms) {
     t = setTimeout(() => fn(...args), ms);
   };
 }
+
+
+
+// Team analyser UI wiring — append after your existing frontend init code
+document.addEventListener("DOMContentLoaded", () => {
+  // helper to show/hide tab panels (re-uses your tab switching if present)
+  function showTab(name) {
+    document.querySelectorAll(".tab-panel").forEach(el => el.classList.add("hidden"));
+    const panel = document.getElementById(name + "-tab");
+    if (panel) panel.classList.remove("hidden");
+    // also update tab button active state
+    document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.toggle("active", btn.dataset.tab === name));
+  }
+
+  // If your app already has tab handling, this will be harmless — we just ensure analyser-tab exists.
+  const analyserTabBtn = document.querySelector('.tab-btn[data-tab="analyser"]');
+  if (analyserTabBtn) {
+    analyserTabBtn.addEventListener("click", (e) => {
+      showTab("analyser");
+      // lazy-load teams when tab opened
+      populateTeams();
+    });
+  }
+
+  const teamSelect = document.getElementById("analyser-team-select");
+  const runTeamBtn = document.getElementById("analyser-run-team");
+  const customInput = document.getElementById("analyser-custom-players");
+  const runCustomBtn = document.getElementById("analyser-run-custom");
+  const resultsPanel = document.getElementById("analyser-results");
+  const resultsBody = document.getElementById("analyser-results-body");
+
+  async function populateTeams() {
+    if (!teamSelect || teamSelect.dataset.loaded === "1") return;
+    try {
+      const data = await app.teams(); // uses your existing API helper
+      // Expecting an array of { id, name, short_name } or similar
+      data.forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = t.short_name ? `${t.short_name} (${t.name})` : t.name || t.id;
+        teamSelect.appendChild(opt);
+      });
+      teamSelect.dataset.loaded = "1";
+    } catch (err) {
+      console.error("Failed to load teams", err);
+    }
+  }
+
+  async function runTeamAnalysis(teamId) {
+    if (!teamId) return;
+    resultsPanel.classList.add("hidden");
+    resultsBody.textContent = "Analysing…";
+    try {
+      const res = await app.teamAnalysis(teamId); // GET /api/team-analysis?team_id=...
+      // Display pretty JSON by default; you can customise rendering later
+      resultsBody.textContent = JSON.stringify(res, null, 2);
+      resultsPanel.classList.remove("hidden");
+    } catch (err) {
+      resultsBody.textContent = "Error: " + (err.message || err);
+      resultsPanel.classList.remove("hidden");
+    }
+  }
+
+  async function runCustomAnalysis(playerIds) {
+    if (!playerIds || !playerIds.length) return;
+    resultsPanel.classList.add("hidden");
+    resultsBody.textContent = "Analysing custom team…";
+    try {
+      const res = await app.customTeamAnalysis(playerIds); // POST /api/team-analysis
+      resultsBody.textContent = JSON.stringify(res, null, 2);
+      resultsPanel.classList.remove("hidden");
+    } catch (err) {
+      resultsBody.textContent = "Error: " + (err.message || err);
+      resultsPanel.classList.remove("hidden");
+    }
+  }
+
+  if (runTeamBtn) {
+    runTeamBtn.addEventListener("click", async (e) => {
+      const teamId = teamSelect.value;
+      if (!teamId) {
+        alert("Please select a team first.");
+        return;
+      }
+      await runTeamAnalysis(teamId);
+    });
+  }
+
+  if (runCustomBtn) {
+    runCustomBtn.addEventListener("click", async (e) => {
+      const raw = customInput.value.trim();
+      if (!raw) { alert("Enter comma-separated player IDs."); return; }
+      const ids = raw.split(",").map(s => parseInt(s.trim(), 10)).filter(Boolean);
+      if (!ids.length) { alert("No valid player ids found."); return; }
+      await runCustomAnalysis(ids);
+    });
+  }
+
+  // If analyser should be visible on initial load (e.g. deep-link), populate teams immediately:
+  if (window.location.hash === "#analyser") {
+    populateTeams();
+    showTab("analyser");
+  }
+});
