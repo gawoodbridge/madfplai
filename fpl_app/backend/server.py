@@ -1,17 +1,4 @@
-"""
-server.py
-Runs the FPL Assistant: a stdlib-only HTTP server that serves the static
-frontend and a small JSON API backed by live FPL data.
-
-Accounts are admin-provisioned only (see auth.py / FPL_USERS env var) -
-there is no sign-up route. Each account gets its own saved squad, so the
-same login shows the same team on every device, and different logins
-never see each other's data.
-
-Run with:  python3 backend/server.py
-Then open: http://localhost:8765  (or whatever $PORT Render assigns)
-"""
-
+# Replace your existing server.py with this updated file (includes signup/profile and team-analysis acceptance of explicit placements).
 import json
 import os
 import sys
@@ -30,19 +17,14 @@ import optimizer
 import lineup
 import transfers
 
-# Render (and most PaaS hosts) assign the port via $PORT - fall back to the
-# original default for local runs.
 PORT = int(os.environ.get("PORT", 8765))
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 
-# in-process cache of rated players, refreshed at most once every 10 minutes.
-# Shared across users since it's just public FPL data, not user-specific.
 _rating_cache = {"players": None, "computed_at": 0, "bootstrap": None}
 RATING_CACHE_TTL = 600
 
-# Endpoints reachable without a session cookie.
 PUBLIC_GET_PATHS = {"/api/session"}
-PUBLIC_POST_PATHS = {"/api/login"}
+PUBLIC_POST_PATHS = {"/api/login", "/api/signup"}
 
 
 def get_rated_players(force=False):
@@ -61,7 +43,6 @@ def players_by_id(rated_players):
 
 
 def refresh_squad_scores(squad_picks, rated_players):
-    """Re-attach the freshest rating data to a saved squad's player ids."""
     by_id = players_by_id(rated_players)
     refreshed = []
     for pick in squad_picks:
@@ -77,12 +58,7 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
 
-    # ------------------------------------------------------------ utils --
-
     def _is_secure(self):
-        # Render terminates TLS at its edge and forwards this header; also
-        # treat any environment with a RENDER var set as "secure" so the
-        # cookie always gets marked Secure in production.
         return self.headers.get("X-Forwarded-Proto", "") == "https" or bool(os.environ.get("RENDER"))
 
     def _current_username(self):
@@ -137,17 +113,14 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    # ------------------------------------------------------------ GET ----
-
+    # ---------------- GET ----------------
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
         query = parse_qs(parsed.query)
-
         try:
             if path == "/api/session":
                 return self._handle_session()
-
             if path.startswith("/api/"):
                 username = self._current_username()
                 if username is None:
@@ -166,15 +139,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self._handle_fixture_ticker()
                 if path == "/api/team-analysis":
                     return self._handle_team_analysis(query, username)
+                if path == "/api/profile":
+                    return self._handle_profile_get(username)
                 return self._send_error_json("Unknown endpoint", 404)
-
             return self._serve_static(path)
         except Exception as e:
             traceback.print_exc()
             self._send_error_json(f"Server error: {e}", 500)
 
-    # ----------------------------------------------------------- POST ----
-
+    # ---------------- POST ----------------
     def do_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path
@@ -186,15 +159,15 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/api/login":
                 return self._handle_login(body)
+            if path == "/api/signup":
+                return self._handle_signup(body)
 
             username = self._current_username()
             if username is None:
                 return self._send_error_json("Not authenticated", 401)
 
-            # Custom-team analysis (user-supplied player ids)
             if path == "/api/team-analysis":
                 return self._handle_team_analysis_post(body, username)
-
             if path == "/api/logout":
                 return self._handle_logout()
             if path == "/api/gameweek":
@@ -203,13 +176,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._handle_compare(body)
             if path == "/api/reset":
                 return self._handle_reset(username)
+            if path == "/api/profile":
+                return self._handle_profile_post(body, username)
             return self._send_error_json("Unknown endpoint", 404)
         except Exception as e:
             traceback.print_exc()
             self._send_error_json(f"Server error: {e}", 500)
 
-    # -------------------------------------------------------- auth api ----
-
+    # ---------------- Auth ----------------
     def _handle_login(self, body):
         username = (body.get("username") or "").strip()
         password = body.get("password") or ""
@@ -217,6 +191,22 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_error_json("Invalid username or password", 401)
         token = auth.create_session(username)
         cookie = auth.build_set_cookie(token, secure=self._is_secure())
+        self._send_json({"username": username}, extra_headers={"Set-Cookie": cookie})
+
+    def _handle_signup(self, body):
+        username = (body.get("username") or "").strip()
+        password = body.get("password") or ""
+        display = body.get("display_name") or ""
+        ok, msg = auth.add_user(username, password)
+        if not ok:
+            return self._send_error_json(msg or "Signup failed", 400)
+        token = auth.create_session(username)
+        cookie = auth.build_set_cookie(token, secure=self._is_secure())
+        # optionally save display name in settings
+        settings = data_store.load_settings(username) or {}
+        if display:
+            settings["display_name"] = display
+            data_store.save_settings(username, settings)
         self._send_json({"username": username}, extra_headers={"Set-Cookie": cookie})
 
     def _handle_logout(self):
@@ -230,8 +220,21 @@ class Handler(BaseHTTPRequestHandler):
         username = self._current_username()
         self._send_json({"authenticated": username is not None, "username": username})
 
-    # ------------------------------------------------------- handlers ----
+    # ---------------- profile ----------------
+    def _handle_profile_get(self, username):
+        settings = data_store.load_settings(username) or {}
+        resp = {"username": username, "display_name": settings.get("display_name")}
+        self._send_json(resp)
 
+    def _handle_profile_post(self, body, username):
+        settings = data_store.load_settings(username) or {}
+        display = body.get("display_name")
+        if display is not None:
+            settings["display_name"] = display
+        data_store.save_settings(username, settings)
+        self._send_json({"message": "Profile updated", "display_name": settings.get("display_name")})
+
+    # ---------------- data endpoints (unchanged) ----------------
     def _handle_status(self, username):
         bootstrap, _ = fpl_api.get_bootstrap()
         current_event, next_event = fpl_api.current_and_next_events(bootstrap)
@@ -284,11 +287,6 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json({"teams": teams})
 
     def _handle_differentials(self, query):
-        """
-        FPL-help feature: low-ownership, high-score players worth a punt -
-        the kind of pick that can separate you from a big chunk of your
-        mini-league if it comes off.
-        """
         rated_players, _ = get_rated_players()
         max_ownership = float((query.get("max_ownership") or [10.0])[0])
         position = (query.get("position") or [None])[0]
@@ -301,10 +299,6 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json({"players": pool[:30], "max_ownership": max_ownership})
 
     def _handle_fixture_ticker(self):
-        """
-        FPL-help feature: next-5-fixture difficulty ticker per club, so you
-        can see good/bad fixture swings at a glance when planning transfers.
-        """
         _, bootstrap = get_rated_players()
         fixtures, _ = fpl_api.get_fixtures()
         teams_by_id = {t["id"]: t for t in bootstrap["teams"]}
@@ -412,7 +406,7 @@ class Handler(BaseHTTPRequestHandler):
             lineup_result = lineup.pick_starting_xi(new_squad, formation)
 
             remaining_free = max(0, existing_squad.get("free_transfers", 1) - transfer_result["recommended_count"])
-            next_free_transfers = min(5, remaining_free + 1)  # FPL banks up to 5 free transfers
+            next_free_transfers = min(5, remaining_free + 1)
 
             data_store.save_squad(username, {
                 "gameweek": gw_id,
@@ -456,29 +450,20 @@ class Handler(BaseHTTPRequestHandler):
         data_store.reset_user_data(username)
         self._send_json({"message": "Squad and gameweek history cleared."})
 
-    # ----------------------------- GET team analysis (existing saved squad or club) --
+    # ---------------- team-analysis GET (saved / club) ----------------
     def _handle_team_analysis(self, query, username):
-        """
-        Analyse either:
-          - a saved user squad (no team_id param) OR
-          - an FPL club (team_id param -> top XI + bench from rated players)
-        Returns JSON shaped for the frontend analyser.
-        """
-        rated_players, bootstrap = get_rated_players()
+        rated_players, _ = get_rated_players()
         team_id_param = (query.get("team_id") or [None])[0]
 
         def compute_analysis(starting, bench):
             combined = list(starting) + list(bench)
-            # total score over starting XI
             total_score = round(sum(float(p.get("score", 0.0)) for p in starting), 3)
-            # total value across all 15 (starting + bench)
             total_value = round(sum(float(p.get("price", 0.0)) for p in combined), 1) if combined else 0.0
             spend_efficiency = round(total_score / total_value, 3) if total_value else None
             starting_fixture_difficulty = None
             if starting:
                 starting_fixture_difficulty = round(sum(float(p.get("fixture_difficulty", 0.0)) for p in starting) / len(starting), 2)
 
-            # position breakdown from starting XI
             position_breakdown = {}
             for p in starting:
                 pos = p.get("position", "UNK")
@@ -490,14 +475,12 @@ class Handler(BaseHTTPRequestHandler):
                 s["avg_score"] = round(s["avg_score"] / s["count"], 3) if s["count"] else 0.0
                 s["total_price"] = round(s["total_price"], 1)
 
-            # club breakdown over all combined picks (usually 15)
             club_counts = {}
             for p in combined:
                 key = p.get("team_short") or p.get("team_name") or "?"
                 club_counts[key] = club_counts.get(key, 0) + 1
             club_breakdown = [{"team": k, "count": v} for k, v in sorted(club_counts.items(), key=lambda x: (-x[1], x[0]))]
 
-            # simple risk flags (status not 'a' or presence of news)
             risk_flags = []
             for p in combined:
                 if p.get("news") or (p.get("status") and p.get("status") != "a"):
@@ -517,7 +500,6 @@ class Handler(BaseHTTPRequestHandler):
                 "risk_flags": risk_flags,
             }
 
-        # If team_id provided -> analyse that club's best XI + bench
         if team_id_param:
             try:
                 team_id = int(team_id_param)
@@ -526,7 +508,6 @@ class Handler(BaseHTTPRequestHandler):
             team_players = [p for p in rated_players if p.get("team_id") == team_id]
             if not team_players:
                 return self._send_error_json("No players found for that team", 404)
-            # pick best XI by score; bench next up to 4
             team_players.sort(key=lambda p: float(p.get("score", 0.0)), reverse=True)
             starting = team_players[:11]
             bench = team_players[11:15]
@@ -534,10 +515,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(analysis)
             return
 
-        # No team_id -> analyse the current user's saved squad
         squad = data_store.load_squad(username)
         if squad is None:
-            # Return empty-ish analysis so frontend can show the empty state
             self._send_json({
                 "total_score": 0,
                 "total_value": 0,
@@ -562,12 +541,12 @@ class Handler(BaseHTTPRequestHandler):
         analysis = compute_analysis(starting, bench)
         self._send_json(analysis)
 
-    # ----------------------------- POST team analysis for custom teams ----
+    # ---------------- team-analysis POST (custom team) ----------------
     def _handle_team_analysis_post(self, body, username):
         """
-        Analyse a custom team supplied by player ids:
-          POST /api/team-analysis  { player_ids: [1,2,3,...] }
-        Returns the same JSON shape used by the frontend analyser.
+        Accepts payload:
+          { player_ids: [...], starting_ids: [...], bench_ids: [...], formation: "...", captain_id: N }
+        If starting_ids/bench_ids provided they are used (validated). Otherwise lineup.pick_starting_xi is used.
         """
         player_ids = body.get("player_ids", [])
         if not isinstance(player_ids, list) or not player_ids:
@@ -577,6 +556,7 @@ class Handler(BaseHTTPRequestHandler):
 
         rated_players, _ = get_rated_players()
         by_id = players_by_id(rated_players)
+
         try:
             ids_int = [int(x) for x in player_ids]
         except (TypeError, ValueError):
@@ -590,16 +570,55 @@ class Handler(BaseHTTPRequestHandler):
                 players.append(p)
             else:
                 missing.append(pid)
-
         if missing:
             return self._send_error_json(f"Some player IDs not found: {', '.join(map(str, missing))}", 422)
 
-        # pick starting XI and bench from the provided players using existing lineup logic
-        lineup_result = lineup.pick_starting_xi(players, None)
-        starting = lineup_result.get("starting", [])
-        bench = lineup_result.get("bench", [])
+        # If explicit placement supplied, validate and use it
+        starting_ids = body.get("starting_ids")
+        bench_ids = body.get("bench_ids")
+        captain_id = body.get("captain_id")
+        formation = body.get("formation") or None
 
-        # compute analysis (same logic as the GET handler)
+        if starting_ids or bench_ids:
+            # normalize arrays and validate membership
+            starting_ids = starting_ids or []
+            bench_ids = bench_ids or []
+            try:
+                starting_ids = [int(x) for x in starting_ids]
+                bench_ids = [int(x) for x in bench_ids]
+            except (TypeError, ValueError):
+                return self._send_error_json("starting_ids and bench_ids must be integer arrays", 400)
+            # all ids must be subset of player_ids
+            invalid = [i for i in (starting_ids + bench_ids) if i not in ids_int]
+            if invalid:
+                return self._send_error_json("Some starting/bench ids are not in player_ids", 422)
+            # dedupe and ensure starting <= 11
+            starting_ids = list(dict.fromkeys(starting_ids))[:11]
+            bench_ids = [i for i in dict.fromkeys(bench_ids) if i not in starting_ids]
+            starting = [by_id[i] for i in starting_ids if i in by_id]
+            bench = [by_id[i] for i in bench_ids if i in by_id]
+            # if bench less than remainder, add remaining players to bench
+            remainder = [i for i in ids_int if i not in starting_ids and i not in bench_ids]
+            for rid in remainder:
+                bench.append(by_id[rid])
+        else:
+            # no explicit placement -> use lineup logic to pick starting XI
+            lineup_result = lineup.pick_starting_xi(players, formation)
+            starting = lineup_result.get("starting", [])
+            bench = lineup_result.get("bench", [])
+
+        # If captain_id provided, ensure it's in starting or bench
+        if captain_id is not None:
+            try:
+                captain_id = int(captain_id)
+            except (TypeError, ValueError):
+                captain_id = None
+        captain = None
+        if captain_id:
+            if any(p["id"] == captain_id for p in (starting + bench)):
+                captain = captain_id
+
+        # compute analysis same as GET handler
         def compute_analysis(starting, bench):
             combined = list(starting) + list(bench)
             total_score = round(sum(float(p.get("score", 0.0)) for p in starting), 3)
@@ -646,14 +665,14 @@ class Handler(BaseHTTPRequestHandler):
             }
 
         analysis = compute_analysis(starting, bench)
+        # annotate captain in analysis result so frontend can show it
+        analysis["captain_id"] = captain
+        analysis["formation"] = formation
         self._send_json(analysis)
 
 
 def main():
     os.makedirs(data_store.DATA_DIR, exist_ok=True)
-    if not auth.USERS:
-        print("WARNING: no FPL_USERS environment variable set - nobody will be able to log in.")
-        print("Set it like:  FPL_USERS=alice:somepassword,bob:otherpassword")
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"FPL Assistant running at http://localhost:{PORT}")
     try:
@@ -661,7 +680,6 @@ def main():
     except KeyboardInterrupt:
         print("\nShutting down.")
         server.shutdown()
-
 
 if __name__ == "__main__":
     main()
