@@ -1,29 +1,15 @@
 """
 auth.py
 Minimal stdlib-only username/password authentication with server-side
-sessions. No external libraries, no database.
-
-There is deliberately no sign-up route. Accounts are provisioned by the
-admin (you) via the FPL_USERS environment variable, e.g. in the Render
-dashboard under your service's "Environment" tab:
-
-    FPL_USERS=alice:hunter2,bob:another-password
-
-Each comma-separated pair is username:password. Whoever holds this
-process's environment controls who can log in - there is no way for a
-visitor to create their own account from the app itself.
-
-Sessions are held in memory (a dict keyed by a random token, sent to the
-browser as an HttpOnly cookie). That means: restarting the server logs
-everyone out, and if you ever scale this service to more than once
-instance, sessions won't be shared between instances. For a small
-personal tool run as a single Render web service this is fine.
+sessions. Supports admin-provisioned accounts via FPL_USERS and persistent
+accounts created via the web UI (saved to data/users.json).
 """
 
 import hmac
 import os
 import time
 import secrets
+import json
 
 SESSION_COOKIE = "fpl_session"
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 30  # 30 days
@@ -31,8 +17,11 @@ SESSION_TTL_SECONDS = 60 * 60 * 24 * 30  # 30 days
 # token -> {"username": str, "expires": float}
 _sessions = {}
 
+# persistent users file (optional)
+PERSISTENT_USERS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "users.json")
 
-def _load_users():
+
+def _load_users_from_env():
     raw = os.environ.get("FPL_USERS", "")
     users = {}
     for pair in raw.split(","):
@@ -46,10 +35,35 @@ def _load_users():
     return users
 
 
-# Loaded once at process start. Set FPL_USERS before starting the server;
-# changing it requires a restart (a Render redeploy, or just re-running
-# python3 backend/server.py locally).
-USERS = _load_users()
+def _load_users_from_file():
+    if not os.path.exists(PERSISTENT_USERS_FILE):
+        return {}
+    try:
+        with open(PERSISTENT_USERS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return {}
+
+
+def _save_users_to_file(users):
+    os.makedirs(os.path.dirname(PERSISTENT_USERS_FILE), exist_ok=True)
+    with open(PERSISTENT_USERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(users, f, indent=2)
+
+
+def _load_all_users():
+    users = _load_users_from_env()
+    file_users = _load_users_from_file()
+    users.update(file_users)
+    return users
+
+
+# Loaded once at process start. Set FPL_USERS before starting the server
+# to provision admin users; signup adds to data/users.json for persistence.
+USERS = _load_all_users()
 
 
 def verify_login(username, password):
@@ -63,6 +77,26 @@ def verify_login(username, password):
         hmac.compare_digest("no-such-user", password)
         return False
     return hmac.compare_digest(expected, password)
+
+
+def add_user(username, password):
+    """Add a persistent user. Returns (True, None) on success or (False, msg)."""
+    if not username or not password:
+        return False, "Username and password are required"
+    if username in USERS:
+        return False, "Username already exists"
+    # minimal validation
+    if len(password) < 4:
+        return False, "Password too short"
+    USERS[username] = password
+    try:
+        # merge existing file users and write back
+        file_users = _load_users_from_file()
+        file_users[username] = password
+        _save_users_to_file(file_users)
+    except Exception as e:
+        return False, f"Failed to persist user: {e}"
+    return True, None
 
 
 def create_session(username):
