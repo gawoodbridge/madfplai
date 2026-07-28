@@ -154,6 +154,42 @@
     </div>
   </section>
 
+
+
+  <section id="analyser-tab" class="tab-panel hidden">
+  <div class="panel-head">
+    <h2>Team Analyser</h2>
+    <p class="muted">Pick a team from the database or supply player IDs to run the Python analysis.</p>
+  </div>
+
+  <div class="field-row">
+    <label for="analyser-team-select"><span>Pick a team</span></label>
+    <select id="analyser-team-select">
+      <option value="">-- Select a team --</option>
+    </select>
+  </div>
+
+  <div class="field-row">
+    <button id="analyser-run-team" class="btn-primary">Analyse selected team</button>
+  </div>
+
+  <div class="panel-head" style="margin-top:16px;">
+    <h3>Or analyse a custom team</h3>
+    <p class="muted">Comma-separated player IDs (e.g. 1,23,456)</p>
+  </div>
+  <div class="field-row">
+    <input type="text" id="analyser-custom-players" placeholder="player ids,comma,separated" />
+    <div style="margin-top:8px;">
+      <button id="analyser-run-custom" class="btn-ghost">Analyse custom team</button>
+    </div>
+  </div>
+
+  <div id="analyser-results" class="panel hidden" style="margin-top:18px;">
+    <div class="panel-head"><h3>Analysis</h3></div>
+    <div id="analyser-results-body" style="white-space:pre-wrap; font-family:var(--font-mono);"></div>
+  </div>
+</section>
+
   <!-- ============================== COMPARER ============================== -->
   <section id="compare-tab" class="tab-panel hidden">
     <div class="panel-head">
